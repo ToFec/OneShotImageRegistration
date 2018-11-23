@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
+import torch.utils.data.DataLoader as DataLoader
 
 import sys, getopt
 import unicodecsv as csv
@@ -88,6 +89,30 @@ def trainNet(net):
   
   print('Finished Training') 
 
+def plotDataset(dataset):
+  i=0
+  plt.figure()
+  plt.subplot(2,2,1)
+  sample = dataset[i]
+  plt.imshow(sample['image'][:,:,90],cmap='gray')
+  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
+  i+=1
+  plt.subplot(2,2,2)
+  sample = dataset[i]
+  plt.imshow(sample['image'][:,:,90],cmap='gray')
+  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
+  i+=1
+  plt.subplot(2,2,3)
+  sample = dataset[i]
+  plt.imshow(sample['image'][:,:,90],cmap='gray')
+  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
+  i+=1
+  plt.subplot(2,2,4)
+  sample = dataset[i]
+  plt.imshow(sample['image'][:,:,90],cmap='gray')
+  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
+  i+=1
+  plt.show()
 
 def main(argv):
   try:
@@ -109,11 +134,9 @@ def main(argv):
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
   print(device)
 
-  headAndNeckTrainSet = HeadAndNeckDataset.HeadAndNeckDataset(trainingFileNamesCSV)
-
-  for i in range(len(headAndNeckTrainSet)):
-    sample = headAndNeckTrainSet[i]
-
+  headAndNeckTrainSet = HeadAndNeckDataset.HeadAndNeckDataset(trainingFileNamesCSV,HeadAndNeckDataset.ToTensor())
+  dataloader = DataLoader(headAndNeckTrainSet, batch_size=4,
+                        shuffle=True, num_workers=4)
   net = Net()
   #net.to(device)
   #trainNet(net)
