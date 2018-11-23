@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision
 import torchvision.transforms as transforms
-import torch.utils.data.DataLoader as DataLoader
+from torch.utils.data import DataLoader
 
 import sys, getopt
 import unicodecsv as csv
@@ -90,39 +90,24 @@ def trainNet(net):
   print('Finished Training') 
 
 def plotDataset(dataset):
-  i=0
-  plt.figure()
-  plt.subplot(2,2,1)
-  sample = dataset[i]
-  plt.imshow(sample['image'][:,:,90],cmap='gray')
-  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
-  i+=1
-  plt.subplot(2,2,2)
-  sample = dataset[i]
-  plt.imshow(sample['image'][:,:,90],cmap='gray')
-  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
-  i+=1
-  plt.subplot(2,2,3)
-  sample = dataset[i]
-  plt.imshow(sample['image'][:,:,90],cmap='gray')
-  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
-  i+=1
-  plt.subplot(2,2,4)
-  sample = dataset[i]
-  plt.imshow(sample['image'][:,:,90],cmap='gray')
-  plt.imshow(sample['label'][:,:,90],cmap='jet', alpha=0.5)
-  i+=1
+  nuOfimg=min(4,len(dataset))
+  nuOfImgPerAxes=max(1,round(nuOfimg/2,0))
+  for i in range(0, nuOfimg):
+      plt.subplot(nuOfImgPerAxes,nuOfImgPerAxes,i+1)
+      sample = dataset[i]
+      plt.imshow(sample['image'][90,:,:],cmap='gray')
+      plt.imshow(sample['label'][90,:,:],cmap='jet', alpha=0.5)
   plt.show()
 
 def main(argv):
   try:
     opts, args = getopt.getopt(argv,'',['trainingFiles=', 'valdiationFiles='])
   except getopt.GetoptError:
-    print 'FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv'
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv')
     return
     
   if not (len(opts)):
-    print 'FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv'
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv')
     return
     
   for opt, arg in opts:
@@ -135,10 +120,14 @@ def main(argv):
   print(device)
 
   headAndNeckTrainSet = HeadAndNeckDataset.HeadAndNeckDataset(trainingFileNamesCSV,HeadAndNeckDataset.ToTensor())
-  dataloader = DataLoader(headAndNeckTrainSet, batch_size=4,
-                        shuffle=True, num_workers=4)
+  plotDataset(headAndNeckTrainSet)
+  dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
+                        shuffle=False, num_workers=1)
+  
+  for i_batch, sample_batched in enumerate(dataloader):
+    print(i_batch, sample_batched['image'].shape)
   net = Net()
-  #net.to(device)
+  net.to(device)
   #trainNet(net)
 
 if __name__ == "__main__":
