@@ -1,8 +1,10 @@
 import os
+import os.path
 import unicodecsv as csv
 from torch.utils.data import Dataset
 import nibabel as nib
 import torch
+from theano.typed_list.basic import length
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -23,13 +25,24 @@ class HeadAndNeckDataset(Dataset):
           self.labelFileList = []
           self.maskFileList = []
           for trainingFilePath in trianingCSVFileReader:
-            trainingFileName = trainingFilePath[0] + '/img.nii.gz'
-            maskFileName = trainingFilePath[0] + '/maskBody.nii.gz'
-            labelsFileName = trainingFilePath[0] + '/structureSet.nii.gz'
-            
-            self.dataFileList.append(trainingFileName)
-            self.labelFileList.append(labelsFileName)
-            self.maskFileList.append(maskFileName)
+            imgFiles = []
+            maskFiles = []
+            labelFiles = []
+            for i in range(10):
+              trainingFileName = trainingFilePath[0] + '/img' + str(i) + '.nii.gz'
+              if (os.path.isfile(trainingFileName)):
+                imgFiles.append(trainingFileName)
+                
+              maskFileName = trainingFilePath[0] + '/mask' + str(i) + '.nii.gz'
+              if (os.path.isfile(maskFileName)):
+                maskFiles.append(maskFileName)
+              labelsFileName = trainingFilePath[0] + '/struct' + str(i) + '.nii.gz'  
+              if (os.path.isfile(labelsFileName)):
+                labelFiles.append(labelsFileName)
+              
+            self.dataFileList.append(imgFiles)
+            self.labelFileList.append(labelFiles)
+            self.maskFileList.append(maskFiles)
             
         finally:
           csvtrainingFiles.close()
@@ -40,16 +53,24 @@ class HeadAndNeckDataset(Dataset):
 
     def __getitem__(self, idx):
         
-        trainingFileName = self.dataFileList[idx]
-        maskFileName = self.maskFileList[idx]
-        labelsFileName = self.labelFileList[idx]
-        imgNii = nib.load(trainingFileName)
-        maskNii = nib.load(maskFileName)
-        labelsNii = nib.load(labelsFileName)
-   
-        imgData = imgNii.get_fdata()
-        labelData = labelsNii.get_fdata()
-        maskData= maskNii.get_fdata()
+        trainingFileNames = self.dataFileList[idx]
+        maskFileNames = self.maskFileList[idx]
+        labelsFileNames = self.labelFileList[idx]
+        
+        for trainingFileName in trainingFileNames:
+          imgNii = nib.load(trainingFileName)
+          floatData = imgNii.get_fdata()
+          maskData = np.concatenate(floatData)
+          
+        if (len(trainingFileNames) == len(maskFileNames)):
+          for maskFileName in maskFileNames:
+            maskNii = nib.load(maskFileName)
+            floatData= maskNii.get_fdata()
+          
+        if (len(trainingFileNames) == len(labelsFileNames)):
+          for labelsFileName in labelsFileNames:
+            labelsNii = nib.load(labelsFileName)
+            floatData = labelsNii.get_fdata()
         
 
         sample = {'image': imgData, 'label': labelData, 'mask': maskData}
