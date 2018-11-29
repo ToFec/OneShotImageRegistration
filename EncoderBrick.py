@@ -10,7 +10,7 @@ class EncoderBrick(nn.Module):
       self.in_channels = in_channels
       
       self.conv0 = nn.Conv3d(in_channels, num_filters, 3)
-      self.conv1 = nn.Conv3d(in_channels, num_filters, 3)
+      self.conv1 = nn.Conv3d(num_filters, num_filters, 3)
       if (self.useBatchNorm):
         self.batch0 = nn.BatchNorm3d(num_filters)
         self.batch1 = nn.BatchNorm3d(num_filters)

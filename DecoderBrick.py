@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 
 class DecoderBrick(nn.Module):
   def __init__(self ,num_filters, in_channels=2, useBatchNorm=True, concatLayer=True):
@@ -11,14 +12,14 @@ class DecoderBrick(nn.Module):
       
       self.deconv0 = nn.ConvTranspose3d(in_channels, num_filters, 2, 2)
       if (self.concatLayer):
-        self.conv0 = nn.Conv3d(2*in_channels, num_filters, 3)
+        self.conv0 = nn.Conv3d(2*num_filters, num_filters, 3)
       else:
-        self.conv0 = nn.Conv3d(in_channels, num_filters, 3)
+        self.conv0 = nn.Conv3d(num_filters, num_filters, 3)
       self.conv1 = nn.Conv3d(num_filters, num_filters, 3)
+      
       if (self.useBatchNorm):
         self.batch0 = nn.BatchNorm3d(num_filters)
         self.batch1 = nn.BatchNorm3d(num_filters)
-        self.batch2 = nn.BatchNorm3d(num_filters)
       
   def forward(self, x, encodeTensor):
     decoder = self.deconv0(x)
@@ -27,22 +28,17 @@ class DecoderBrick(nn.Module):
     else:
       decoder = torch.add(decoder,encodeTensor)
     
-    if (self.useBatchNorm):
-      decoder = self.batch0(decoder)
-    
-    decoder = nn.functional.relu(decoder)
-    
     decoder = nn.functional.pad(decoder, self.padVals, 'replicate')
     decoder = self.conv0(decoder)
     if (self.useBatchNorm):
-      decoder = self.batch1(decoder)
+      decoder = self.batch0(decoder)
       
     decoder = nn.functional.relu(decoder)
     
     decoder = nn.functional.pad(decoder, self.padVals, 'replicate')
     decoder = self.conv1(decoder)
     if (self.useBatchNorm):
-      decoder = self.batch2(decoder)
+      decoder = self.batch1(decoder)
     
     decoder = nn.functional.relu(decoder)
     
