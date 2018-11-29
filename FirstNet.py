@@ -1,19 +1,14 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-import torchvision
-import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 
 import sys, getopt
-import unicodecsv as csv
 import matplotlib.pyplot as plt
 import numpy as np
 
-import nibabel as nib
-import HeadAndNeckDataset
-import DummyNet
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
+from Net import UNet
 
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -27,23 +22,22 @@ def trainNet(net, device, dataloader):
   net.zero_grad()
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
   
-  criterion = nn.CrossEntropyLoss()
-  
- 
   for epoch in range(2):  # loop over the dataset multiple times
   
       running_loss = 0.0
       for i, data in enumerate(dataloader, 0):
           # get the inputs
-          inputs, labels = data
-          inputs, labels = inputs.to(device), labels.to(device)
+          imgData = data['image']
+          labelData = data['label']
+          maskData = data['mask']
+          imgData = imgData.to(device)
           
           # zero the parameter gradients
           optimizer.zero_grad()
   
           # forward + backward + optimize
-          outputs = net(inputs)
-          loss = criterion(outputs, labels)
+          outputs = net(imgData)
+          loss = sum(outputs)
           loss.backward()
           optimizer.step()
   
@@ -62,8 +56,16 @@ def plotDataset(dataset):
   for i in range(0, nuOfimg):
       plt.subplot(nuOfImgPerAxes,nuOfImgPerAxes,i+1)
       sample = dataset[i]
-      plt.imshow(sample['image'][90,:,:],cmap='gray')
-      plt.imshow(sample['label'][90,:,:],cmap='jet', alpha=0.5)
+      if (sample['image'].dim() == 4):
+        slice = int(sample['image'].shape[3] / 2)
+        plt.imshow(sample['image'][0,:,:,slice],cmap='gray')
+        if (sample['label'].dim() > 1):
+          plt.imshow(sample['label'][0,:,:,slice],cmap='jet', alpha=0.5)
+      elif (sample['image'].dim() == 3):
+        slice = int(sample['image'].shape[2] / 2)
+        plt.imshow(sample['image'][:,:,slice],cmap='gray')
+        if (sample['label'].dim() > 1):
+          plt.imshow(sample['label'][:,:,slice],cmap='jet', alpha=0.5)
   plt.show()
 
 def main(argv):
@@ -84,15 +86,19 @@ def main(argv):
       validationFileNamesCSV = arg
       
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+  device = "cpu" ## for testing 
   print(device)
   
-  headAndNeckTrainSet = HeadAndNeckDataset.HeadAndNeckDataset(trainingFileNamesCSV,HeadAndNeckDataset.ToTensor())
+  headAndNeckTrainSet = HeadAndNeckDataset(trainingFileNamesCSV,ToTensor())
+#   plotDataset(headAndNeckTrainSet)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=1)
   
+#   for i_batch, sample_batched in enumerate(dataloader):
+#     print(i_batch, sample_batched['image'].shape)
 
-  net = DummyNet.DummyNet()
+  net = UNet(2, True, True, 2)
   trainNet(net, device, dataloader)
 
 if __name__ == "__main__":

@@ -1,10 +1,9 @@
-import os
 import os.path
 import unicodecsv as csv
 from torch.utils.data import Dataset
-import nibabel as nib
+from medpy.io import load
 import torch
-from theano.typed_list.basic import length
+import numpy as np
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -28,10 +27,13 @@ class HeadAndNeckDataset(Dataset):
             imgFiles = []
             maskFiles = []
             labelFiles = []
-            for i in range(10):
+            i = 0
+            while (True):
               trainingFileName = trainingFilePath[0] + '/img' + str(i) + '.nii.gz'
               if (os.path.isfile(trainingFileName)):
                 imgFiles.append(trainingFileName)
+              else:
+                break
                 
               maskFileName = trainingFilePath[0] + '/mask' + str(i) + '.nii.gz'
               if (os.path.isfile(maskFileName)):
@@ -39,6 +41,7 @@ class HeadAndNeckDataset(Dataset):
               labelsFileName = trainingFilePath[0] + '/struct' + str(i) + '.nii.gz'  
               if (os.path.isfile(labelsFileName)):
                 labelFiles.append(labelsFileName)
+              i=i+1
               
             self.dataFileList.append(imgFiles)
             self.labelFileList.append(labelFiles)
@@ -57,21 +60,25 @@ class HeadAndNeckDataset(Dataset):
         maskFileNames = self.maskFileList[idx]
         labelsFileNames = self.labelFileList[idx]
         
+        imgData = []
         for trainingFileName in trainingFileNames:
-          imgNii = nib.load(trainingFileName)
-          floatData = imgNii.get_fdata()
-          maskData = np.concatenate(floatData)
+          imgNii, imgHeader = load(trainingFileName)
+          imgData.append(imgNii)
+        imgData = np.stack(imgData)
           
+        maskData = []
         if (len(trainingFileNames) == len(maskFileNames)):
           for maskFileName in maskFileNames:
-            maskNii = nib.load(maskFileName)
-            floatData= maskNii.get_fdata()
-          
+            maskNii, maskHeader = load(maskFileName)
+            maskData.append(maskNii)
+          maskData = np.stack(maskData)
+        
+        labelData = []
         if (len(trainingFileNames) == len(labelsFileNames)):
           for labelsFileName in labelsFileNames:
-            labelsNii = nib.load(labelsFileName)
-            floatData = labelsNii.get_fdata()
-        
+            labelsNii, labelsHeader = load(labelsFileName)
+            labelData.append(labelsNii)
+          labelData = np.stack(labelData)
 
         sample = {'image': imgData, 'label': labelData, 'mask': maskData}
         
@@ -89,13 +96,19 @@ class ToTensor(object):
         # swap color axis because
         # numpy image: H x W x C
         # torch image: C X H X W
-        image = image.transpose((2, 0, 1))
-        label = label.transpose((2, 0, 1))
-        mask = mask.transpose((2, 0, 1))
+#         image = image.transpose((2, 0, 1))
+#         label = label.transpose((2, 0, 1))
+#         mask = mask.transpose((2, 0, 1))
+        labelTorch = torch.tensor([1])
+        if(len(label) > 0):
+          labelTorch = torch.from_numpy(label)
+          
+        maskTorch = torch.tensor([1])
+        if(len(mask) > 0):
+          maskTorch = torch.from_numpy(mask)
+          
+          
         return {'image': torch.from_numpy(image),
-                'label': torch.from_numpy(label),
-                'mask': torch.from_numpy(mask)}      
-        
-        
-        
+                'label': labelTorch,
+                'mask': maskTorch}      
         
