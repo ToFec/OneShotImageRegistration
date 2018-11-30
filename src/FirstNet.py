@@ -39,16 +39,15 @@ def trainNet(net, device, dataloader):
   
           # forward + backward + optimize
           defFields = net(imgData)
-          
-          imgDataDef = torch.zeros(imgData.shape)
-          for imgIdx in xrange(imgData.shape[0]):
-            for chanIdx in xrange(-1,imgData.shape[1]-1):
+          imgDataDef = torch.zeros(imgData.shape, requires_grad=False)
+          for imgIdx in range(imgData.shape[0]):
+            for chanIdx in range(-1,imgData.shape[1]-1):
               imgToDef = imgData[imgIdx, chanIdx,]
-              defX = defFields[imgIdx, chanIdx * 3,]
-              defY = defFields[imgIdx, chanIdx * 3 + 1,]
-              defZ = defFields[imgIdx, chanIdx * 3 + 2,]
-              imgDataDef[imgIdx, chanIdx+1,] = deform(imgToDef, defX, defY, defZ)
-          
+              defX = defFields[imgIdx, chanIdx * 3,].detach()
+              defY = defFields[imgIdx, chanIdx * 3 + 1,].detach()
+              defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach()
+              imgDataDef[imgIdx, chanIdx+1,] = torch.from_numpy(deform(imgToDef, defX, defY, defZ))
+          imgDataDef.requires_grad = True  
           loss = lf.normCrossCorr(imgData, imgDataDef)## TODO implement loss function
           loss.backward()
           optimizer.step()

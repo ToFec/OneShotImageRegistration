@@ -47,7 +47,7 @@ class UNet(nn.Module):
         if ( i < self.depth-1):
           x = self.pools[i](x)
         
-    for i in xrange(len(self.decoders) -1, -1, -1):
+    for i in range(len(self.decoders) -1, -1, -1):
         decoder = self.decoders[i]
         encOut = encoder_outs[i]
         x = decoder(x, encOut)

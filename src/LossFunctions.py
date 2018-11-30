@@ -17,8 +17,8 @@ def dice_loss(y_true, y_pred):
   ## img0 and img1 must have the same shape
 def normCrossCorr(img0, img1):
   result = 0
-  for imgIdx in xrange(img0.shape[0]):
-    for chanIdx in xrange(img0.shape[1]):
+  for imgIdx in range(img0.shape[0]):
+    for chanIdx in range(img0.shape[1]):
       x = img0[imgIdx, chanIdx,]
       y = img1[imgIdx, chanIdx,]
       x = torch.reshape(x, (-1,))
