@@ -6,9 +6,11 @@ from torch.utils.data import DataLoader
 import sys, getopt
 import matplotlib.pyplot as plt
 import numpy as np
+from Utils import deform
 
 from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
 from Net import UNet
+import LossFunctions as lf
 
 def imshow(img):
     img = img / 2 + 0.5     # unnormalize
@@ -36,8 +38,18 @@ def trainNet(net, device, dataloader):
           optimizer.zero_grad()
   
           # forward + backward + optimize
-          outputs = net(imgData)
-          loss = sum(outputs)
+          defFields = net(imgData)
+          
+          imgDataDef = torch.zeros(imgData.shape)
+          for imgIdx in xrange(imgData.shape[0]):
+            for chanIdx in xrange(-1,imgData.shape[1]-1):
+              imgToDef = imgData[imgIdx, chanIdx,]
+              defX = defFields[imgIdx, chanIdx * 3,]
+              defY = defFields[imgIdx, chanIdx * 3 + 1,]
+              defZ = defFields[imgIdx, chanIdx * 3 + 2,]
+              imgDataDef[imgIdx, chanIdx+1,] = deform(imgToDef, defX, defY, defZ)
+          
+          loss = lf.normCrossCorr(imgData, imgDataDef)## TODO implement loss function
           loss.backward()
           optimizer.step()
   
