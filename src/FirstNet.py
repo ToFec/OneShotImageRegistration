@@ -23,7 +23,8 @@ def trainNet(net, device, dataloader):
   net.to(device)
   net.zero_grad()
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-  
+  lambda0 = 1
+  lambda1 = 1
   for epoch in range(2):  # loop over the dataset multiple times
   
       running_loss = 0.0
@@ -47,8 +48,8 @@ def trainNet(net, device, dataloader):
               defY = defFields[imgIdx, chanIdx * 3 + 1,].detach()
               defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach()
               imgDataDef[imgIdx, chanIdx+1,] = torch.from_numpy(deform(imgToDef, defX, defY, defZ))
-          imgDataDef.requires_grad = True  
-          loss = lf.normCrossCorr(imgData, imgDataDef)## TODO implement loss function
+          imgDataDef.requires_grad = True
+          loss = lambda0 * lf.normCrossCorr(imgData, imgDataDef) + lambda1 * lf.smoothnessVecField(defFields)## TODO implement loss function
           loss.backward()
           optimizer.step()
   

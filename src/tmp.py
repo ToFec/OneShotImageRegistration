@@ -3,9 +3,9 @@ from Utils import deform
 import numpy as np
 
 
-imgpath = '/home/fechter/workspace/TorchSandbox/src/data/Data00/img0.nii.gz'
-defFieldpath = '/home/fechter/workspace/TorchSandbox/src/data/Data00/def0.nii.gz'
-refPath = '/home/fechter/workspace/TorchSandbox/src/data/Data00/img1.nii.gz'
+imgpath = '/home/fechter/workspace/TorchSandbox/resources/Data00/img0.nii.gz'
+defFieldpath = '/home/fechter/workspace/TorchSandbox/resources/Data00/def0.nii.gz'
+refPath = '/home/fechter/workspace/TorchSandbox/resources/Data00/img1.nii.gz'
 
 imgNii, imgHeader = load(imgpath)
 refImgNii, refImgHeader = load(refPath)

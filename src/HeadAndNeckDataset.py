@@ -63,6 +63,8 @@ class HeadAndNeckDataset(Dataset):
         imgData = []
         for trainingFileName in trainingFileNames:
           imgNii, imgHeader = load(trainingFileName)
+          imgNii = imgNii - imgNii.mean()
+          imgNii = imgNii / imgNii.std()
           imgData.append(imgNii)
         imgData = np.stack(imgData)
           

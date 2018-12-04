@@ -14,6 +14,22 @@ def dice_loss(y_true, y_pred):
     loss = 1 - dice_coeff(y_true, y_pred)
     return loss
   
+def smoothnessVecField(vecField):
+  idx = range(-1,vecField.shape[0]-1)
+  d0 = vecField[:,:,:,:] - vecField[idx,:,:,:]
+  idx = range(-1,vecField.shape[1]-1)
+  d1 = vecField[:,:,:,:] - vecField[:,idx,:,:]
+  idx = range(-1,vecField.shape[2]-1)
+  d2 = vecField[:,:,:,:] - vecField[:,:,idx,:]
+  idx = range(-1,vecField.shape[3]-1)
+  d3 = vecField[:,:,:,:] - vecField[:,:,:,idx]
+  d0 = d0 * d0
+  d1 = d1 * d1
+  d2 = d2 * d2
+  d3 = d3 * d3
+  loss = torch.sum(d0[:]) + torch.sum(d1[:]) + torch.sum(d2[:]) + torch.sum(d3[:])
+  return loss
+  
   ## img0 and img1 must have the same shape
 def normCrossCorr(img0, img1):
   result = 0
