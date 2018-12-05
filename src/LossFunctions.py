@@ -15,12 +15,9 @@ def dice_loss(y_true, y_pred):
     return loss
   
 def smoothnessVecField(vecField):
-  idx = range(-1,vecField.shape[0]-1)
-  d0 = vecField[:,:,:,:] - vecField[idx,:,:,:]
-  idx = range(-1,vecField.shape[1]-1)
-  d1 = vecField[:,:,:,:] - vecField[:,idx,:,:]
-  idx = range(-1,vecField.shape[2]-1)
-  d2 = vecField[:,:,:,:] - vecField[:,:,idx,:]
+  d0 = vecField[:-1,:,:,:] - vecField[1:,:,:,:]
+  d1 = vecField[:,:-1,:,:] - vecField[:,1:,:,:]
+  d2 = vecField[:,:,:-1,:] - vecField[:,:,1:,:]
   idx = range(-1,vecField.shape[3]-1)
   d3 = vecField[:,:,:,:] - vecField[:,:,:,idx]
   d0 = d0 * d0

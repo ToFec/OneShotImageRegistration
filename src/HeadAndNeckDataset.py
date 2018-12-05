@@ -8,14 +8,8 @@ import numpy as np
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, csv_file, transform=None):
-        """
-        Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
+    def __init__(self, csv_file, transform=None, keepLoadedItems=True):
+
         self.transform = transform
         csvtrainingFiles =  open(csv_file, 'rb')
         try:        
@@ -23,6 +17,12 @@ class HeadAndNeckDataset(Dataset):
           self.dataFileList = []
           self.labelFileList = []
           self.maskFileList = []
+          
+          ##works currently only for single thread
+          if (keepLoadedItems):
+            self.keepLoadedItems = keepLoadedItems
+            self.loadedIgSamples = {}
+            
           for trainingFilePath in trianingCSVFileReader:
             imgFiles = []
             maskFiles = []
@@ -56,6 +56,13 @@ class HeadAndNeckDataset(Dataset):
 
     def __getitem__(self, idx):
         
+        ##works currently only for single thread
+        if self.keepLoadedItems:
+          if idx in self.loadedIgSamples:
+            sample = self.loadedIgSamples[idx]
+            return sample
+          
+          
         trainingFileNames = self.dataFileList[idx]
         maskFileNames = self.maskFileList[idx]
         labelsFileNames = self.labelFileList[idx]
@@ -86,6 +93,10 @@ class HeadAndNeckDataset(Dataset):
         
         if self.transform:
             sample = self.transform(sample)
+
+        ##works currently only for single thread
+        if self.keepLoadedItems:
+          self.loadedIgSamples[idx] = sample
 
         return sample
       
