@@ -15,16 +15,19 @@ def dice_loss(y_true, y_pred):
     return loss
   
 def smoothnessVecField(vecField):
-  d0 = vecField[:-1,:,:,:] - vecField[1:,:,:,:]
-  d1 = vecField[:,:-1,:,:] - vecField[:,1:,:,:]
-  d2 = vecField[:,:,:-1,:] - vecField[:,:,1:,:]
-  idx = range(-1,vecField.shape[3]-1)
-  d3 = vecField[:,:,:,:] - vecField[:,:,:,idx]
-  d0 = d0 * d0
-  d1 = d1 * d1
-  d2 = d2 * d2
-  d3 = d3 * d3
-  loss = torch.sum(d0[:]) + torch.sum(d1[:]) + torch.sum(d2[:]) + torch.sum(d3[:])
+  loss = 0
+  for imgIdx in range(img0.shape[0]):
+    idx = range(-1,vecField.shape[3]-1)
+    d3 = vecField[:,:,:,:] - vecField[idx,:,:,:]
+    d0 = vecField[:-1,:,:,:] - vecField[1:,:,:,:]
+    d1 = vecField[:,:-1,:,:] - vecField[:,1:,:,:]
+    d2 = vecField[:,:,:-1,:] - vecField[:,:,1:,:]
+
+    d0 = d0 * d0
+    d1 = d1 * d1
+    d2 = d2 * d2
+    d3 = d3 * d3
+    loss = loss + torch.sum(d0[:]) + torch.sum(d1[:]) + torch.sum(d2[:]) + torch.sum(d3[:])
   return loss
   
   ## img0 and img1 must have the same shape

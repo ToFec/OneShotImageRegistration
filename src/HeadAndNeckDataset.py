@@ -8,21 +8,21 @@ import numpy as np
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, csv_file, transform=None, keepLoadedItems=True):
+    def __init__(self, csv_file, transform=None, loadOnInstantiation=True):
 
         self.transform = transform
+        self.loadOnInstantiation = loadOnInstantiation
         csvtrainingFiles =  open(csv_file, 'rb')
         try:        
           trianingCSVFileReader = csv.reader(csvtrainingFiles, delimiter=';', encoding='iso8859_15')
-          self.dataFileList = []
-          self.labelFileList = []
-          self.maskFileList = []
-          
-          ##works currently only for single thread
-          if (keepLoadedItems):
-            self.keepLoadedItems = keepLoadedItems
+          if (self.loadOnInstantiation):
             self.loadedIgSamples = {}
-            
+          else:
+            self.dataFileList = []
+            self.labelFileList = []
+            self.maskFileList = []
+          
+          idx = 0
           for trainingFilePath in trianingCSVFileReader:
             imgFiles = []
             maskFiles = []
@@ -42,61 +42,67 @@ class HeadAndNeckDataset(Dataset):
               if (os.path.isfile(labelsFileName)):
                 labelFiles.append(labelsFileName)
               i=i+1
-              
-            self.dataFileList.append(imgFiles)
-            self.labelFileList.append(labelFiles)
-            self.maskFileList.append(maskFiles)
             
+            if (self.loadOnInstantiation):
+              sample = self.loadData(imgFiles, maskFiles, labelFiles)
+              self.loadedIgSamples[idx] = sample
+              idx = idx + 1
+            else:
+              self.dataFileList.append(imgFiles)
+              self.labelFileList.append(labelFiles)
+              self.maskFileList.append(maskFiles)
+          
+          if (self.loadOnInstantiation):
+            self.length = len(self.loadedIgSamples)
+          else:
+            self.length = len(self.dataFileList)
         finally:
           csvtrainingFiles.close()
           
 
     def __len__(self):
-        return len(self.dataFileList)
+        return self.length
+    
+    def loadData(self, trainingFileNames, maskFileNames, labelsFileNames):
+      imgData = []
+      for trainingFileName in trainingFileNames:
+        imgNii, imgHeader = load(trainingFileName)
+        imgNii = imgNii - imgNii.mean()
+        imgNii = imgNii / imgNii.std()
+        imgData.append(imgNii)
+      imgData = np.stack(imgData)
+        
+      maskData = []
+      if (len(trainingFileNames) == len(maskFileNames)):
+        for maskFileName in maskFileNames:
+          maskNii, maskHeader = load(maskFileName)
+          maskData.append(maskNii)
+        maskData = np.stack(maskData)
+      
+      labelData = []
+      if (len(trainingFileNames) == len(labelsFileNames)):
+        for labelsFileName in labelsFileNames:
+          labelsNii, labelsHeader = load(labelsFileName)
+          labelData.append(labelsNii)
+        labelData = np.stack(labelData)
 
+      sample = {'image': imgData, 'label': labelData, 'mask': maskData}
+      if self.transform:
+        sample = self.transform(sample)
+      return sample  
+    
     def __getitem__(self, idx):
         
         ##works currently only for single thread
-        if self.keepLoadedItems:
-          if idx in self.loadedIgSamples:
-            sample = self.loadedIgSamples[idx]
-            return sample
-          
-          
-        trainingFileNames = self.dataFileList[idx]
-        maskFileNames = self.maskFileList[idx]
-        labelsFileNames = self.labelFileList[idx]
-        
-        imgData = []
-        for trainingFileName in trainingFileNames:
-          imgNii, imgHeader = load(trainingFileName)
-          imgNii = imgNii - imgNii.mean()
-          imgNii = imgNii / imgNii.std()
-          imgData.append(imgNii)
-        imgData = np.stack(imgData)
-          
-        maskData = []
-        if (len(trainingFileNames) == len(maskFileNames)):
-          for maskFileName in maskFileNames:
-            maskNii, maskHeader = load(maskFileName)
-            maskData.append(maskNii)
-          maskData = np.stack(maskData)
-        
-        labelData = []
-        if (len(trainingFileNames) == len(labelsFileNames)):
-          for labelsFileName in labelsFileNames:
-            labelsNii, labelsHeader = load(labelsFileName)
-            labelData.append(labelsNii)
-          labelData = np.stack(labelData)
-
-        sample = {'image': imgData, 'label': labelData, 'mask': maskData}
-        
-        if self.transform:
+        if self.loadOnInstantiation:
+          sample = self.loadedIgSamples[idx]
+        else:
+          trainingFileNames = self.dataFileList[idx]
+          maskFileNames = self.maskFileList[idx]
+          labelsFileNames = self.labelFileList[idx]
+          sample = self.loadData(trainingFileNames, maskFileNames, labelsFileNames)
+          if self.transform:
             sample = self.transform(sample)
-
-        ##works currently only for single thread
-        if self.keepLoadedItems:
-          self.loadedIgSamples[idx] = sample
 
         return sample
       

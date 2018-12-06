@@ -1,6 +1,7 @@
 from medpy.io import load, save
 from Utils import deform
 import numpy as np
+import LossFunctions as lf
 
 
 imgpath = '/home/fechter/workspace/TorchSandbox/resources/Data00/img0.nii.gz'
