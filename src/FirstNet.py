@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.multiprocessing as mp
 
 import sys, getopt
 import matplotlib.pyplot as plt
@@ -45,8 +46,7 @@ def trainNet(net, device, dataloader):
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
   lambda0 = 1
   lambda1 = 1
-  for epoch in range(20):  # loop over the dataset multiple times
-    start = time.time()
+  for epoch in range(50):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
         # get the inputs
         imgData = data['image']
@@ -76,8 +76,6 @@ def trainNet(net, device, dataloader):
         loss.backward()
         optimizer.step()
 
-    end = time.time()
-    print(end - start)
   print('Finished Training') 
 
 def plotDataset(dataset):
@@ -129,8 +127,24 @@ def main(argv):
 #     print(i_batch, sample_batched['image'].shape)
 
   net = UNet(2, True, True, 2)
+  net.share_memory()
+  processes = []
+  num_processes=2
+  
   print(net)
-  trainNet(net, device, dataloader)
+  start = time.time()
+  
+  for rank in range(num_processes):
+    p = mp.Process(target=trainNet, args=(net, device, dataloader))
+    p.start()
+    processes.append(p)
+  for p in processes:
+    p.join()
+        
+
+  #trainNet(net, device, dataloader)
+  end = time.time()
+  print(end - start)
   testNet(net, device, dataloader)
 
 if __name__ == "__main__":
