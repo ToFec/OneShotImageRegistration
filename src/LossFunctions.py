@@ -14,20 +14,26 @@ def dice_loss(y_true, y_pred):
     loss = 1 - dice_coeff(y_true, y_pred)
     return loss
   
-def smoothnessVecField(vecField):
-  loss = 0
-  for imgIdx in range(img0.shape[0]):
-    idx = range(-1,vecField.shape[3]-1)
-    d3 = vecField[:,:,:,:] - vecField[idx,:,:,:]
-    d0 = vecField[:-1,:,:,:] - vecField[1:,:,:,:]
-    d1 = vecField[:,:-1,:,:] - vecField[:,1:,:,:]
-    d2 = vecField[:,:,:-1,:] - vecField[:,:,1:,:]
-
-    d0 = d0 * d0
-    d1 = d1 * d1
-    d2 = d2 * d2
-    d3 = d3 * d3
-    loss = loss + torch.sum(d0[:]) + torch.sum(d1[:]) + torch.sum(d2[:]) + torch.sum(d3[:])
+def smoothnessVecField(vecFields):
+  criterion = torch.nn.SmoothL1Loss()
+  loss = torch.tensor([0.])
+  for imgIdx in range(vecFields.shape[0]):
+    vecField = vecFields[imgIdx]
+    idx = range(-1,vecField.shape[0]-1)
+    
+    t = vecField[idx,:,:,:].detach()
+    loss0 = criterion(vecField[:,:,:,:], t)
+    
+    t = vecField[:,1:,:,:].detach()
+    loss1 = criterion(vecField[:,:-1,:,:], t)
+    
+    t = vecField[:,:,1:,:].detach()
+    loss2 = criterion(vecField[:,:,:-1,:], t)
+    
+    t = vecField[:,:,:,1:].detach()
+    loss3 = criterion(vecField[:,:,:,:-1], t)
+    
+    loss = loss + loss0 + loss1 + loss2 + loss3
   return loss
   
   ## img0 and img1 must have the same shape

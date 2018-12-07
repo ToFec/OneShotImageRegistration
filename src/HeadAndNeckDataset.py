@@ -1,7 +1,7 @@
 import os.path
 import unicodecsv as csv
 from torch.utils.data import Dataset
-from medpy.io import load
+from medpy.io import load, save
 import torch
 import numpy as np
 
@@ -105,6 +105,9 @@ class HeadAndNeckDataset(Dataset):
             sample = self.transform(sample)
 
         return sample
+
+def saveData(data, filename):
+  save(data, filename)
       
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""

@@ -18,3 +18,8 @@ def deform(inputVol, x1, y1, z1):
   deformedVol = sitk.GetArrayFromImage(moving) 
   
   return deformedVol
+
+def getDefField(x1, y1, z1):
+  defField = np.stack([x1, y1, z1])
+  defField = np.moveaxis(defField, 0, -1)
+  return defField
