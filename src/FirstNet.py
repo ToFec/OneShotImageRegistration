@@ -41,12 +41,13 @@ def testNet(net, device, dataloader):
           saveData(imgDataDef, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nii.gz')
           saveData(getDefField(defX, defY, defZ), 'deformdationFieldDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nii.gz')
   
-def trainNet(net, device, dataloader):
+def trainNet(net, device, dataloader, epochs):
   net.to(device)
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
   lambda0 = 1
-  lambda1 = 1
-  for epoch in range(50):  # loop over the dataset multiple times
+  lambda1 = 0.1
+  criterion = torch.nn.MSELoss()
+  for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
         # get the inputs
         imgData = data['image']
@@ -66,13 +67,21 @@ def trainNet(net, device, dataloader):
             defX = defFields[imgIdx, chanIdx * 3,].detach()
             defY = defFields[imgIdx, chanIdx * 3 + 1,].detach()
             defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach()
+            print(torch.sum(defX))
             imgDataDef[imgIdx, chanIdx+1,] = torch.from_numpy(deform(imgToDef, defX, defY, defZ))
         imgDataDef.requires_grad = True
-        crossCorr = lf.normCrossCorr(imgData, imgDataDef)
-        smoothnessDF = lf.smoothnessVecField(defFields)
-        loss = lambda0 * crossCorr + lambda1 * smoothnessDF
-        print('cc: %.3f smmothness: %.3f' % (crossCorr, smoothnessDF))
+#         crossCorr = lf.normCrossCorr(imgData, imgDataDef)
+#         smoothnessDF = lf.smoothnessVecField(defFields)
+#         loss = lambda0 * crossCorr + lambda1 * smoothnessDF
+#         print('cc: %.3f smmothness: %.3f' % (crossCorr, smoothnessDF))
+#         print('loss: %.3f' % (loss))
+        
+        #TODO: there is no connection of imgData and imgDataDef to the net parameters as the
+        # calculatinos of image data def were peformed when grad = false
+        # reimplement method
+        loss = criterion(imgData, imgDataDef)
         print('loss: %.3f' % (loss))
+        
         loss.backward()
         optimizer.step()
 
@@ -126,23 +135,22 @@ def main(argv):
 #   for i_batch, sample_batched in enumerate(dataloader):
 #     print(i_batch, sample_batched['image'].shape)
 
-  net = UNet(2, True, True, 2)
-  net.share_memory()
-  processes = []
-  num_processes=2
-  
+  net = UNet(2, True, True, 3)
   print(net)
   start = time.time()
-  
-  for rank in range(num_processes):
-    p = mp.Process(target=trainNet, args=(net, device, dataloader))
-    p.start()
-    processes.append(p)
-  for p in processes:
-    p.join()
+  if False: #device == "cpu":
+    net.share_memory()
+    processes = []
+    num_processes=2
+    for rank in range(num_processes):
+      p = mp.Process(target=trainNet, args=(net, device, dataloader, 50))
+      p.start()
+      processes.append(p)
+    for p in processes:
+      p.join()
         
-
-  #trainNet(net, device, dataloader)
+  else:
+    trainNet(net, device, dataloader, 50)
   end = time.time()
   print(end - start)
   testNet(net, device, dataloader)
