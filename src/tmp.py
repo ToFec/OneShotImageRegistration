@@ -25,6 +25,9 @@ imgNii = torch.from_numpy(imgNii)
 refImgNii = torch.from_numpy(refImgNii)
 defFieldNii = torch.from_numpy(defFieldNii)
 
+#https://pytorch.org/docs/stable/nn.html?highlight=grid
+torch.nn.functional.grid_sample()
+
 cc0 = lf.normCrossCorr(imgNii, imgNii)
 cc1 = lf.normCrossCorr(imgNii, refImgNii)
 
