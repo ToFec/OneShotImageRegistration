@@ -122,9 +122,15 @@ def main(argv):
     elif opt == '--valdiationFiles':
       validationFileNamesCSV = arg
       
+  torch.manual_seed(0)
+  np.random.seed(0)
+  torch.backends.cudnn.deterministic = True
+  torch.backends.cudnn.benchmark = False
+  
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
   device = "cpu" ## for testing 
   print(device)
+  
   
   headAndNeckTrainSet = HeadAndNeckDataset(trainingFileNamesCSV,ToTensor())
 #   plotDataset(headAndNeckTrainSet)
