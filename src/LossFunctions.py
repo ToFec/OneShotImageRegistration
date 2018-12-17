@@ -14,9 +14,9 @@ def dice_loss(y_true, y_pred):
     loss = 1 - dice_coeff(y_true, y_pred)
     return loss
   
-def smoothnessVecField(vecFields):
+def smoothnessVecField(vecFields, device):
   criterion = torch.nn.SmoothL1Loss()
-  loss = torch.tensor([0.])
+  loss = torch.empty(vecFields.shape[0], device=device)
   for imgIdx in range(vecFields.shape[0]):
     vecField = vecFields[imgIdx]
     idx = range(-1,vecField.shape[0]-1)
@@ -33,8 +33,8 @@ def smoothnessVecField(vecFields):
     t = vecField[:,:,:,1:].detach()
     loss3 = criterion(vecField[:,:,:,:-1], t)
     
-    loss = loss + loss0 + loss1 + loss2 + loss3
-  return loss
+    loss[imgIdx]= loss0 + loss1 + loss2 + loss3
+  return loss.sum()
   
   ## img0 and img1 must have the same shape
 def normCrossCorr(img0, img1):

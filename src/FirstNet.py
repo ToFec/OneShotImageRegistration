@@ -7,7 +7,8 @@ import torch.multiprocessing as mp
 import sys, getopt
 import matplotlib.pyplot as plt
 import numpy as np
-from Utils import deform, getDefField
+from Utils import deform, getDefField, getZeroDefField
+import SimpleITK as sitk
 
 import time
 
@@ -29,59 +30,78 @@ def testNet(net, device, dataloader):
       labelData = data['label']
       maskData = data['mask']
       imgData = imgData.to(device)
+      zeroDefField = getZeroDefField(imgData)
+      zeroDefField = zeroDefField.to(device)
       
       defFields = net(imgData)
       for imgIdx in range(imgData.shape[0]):
         for chanIdx in range(-1,imgData.shape[1]-1):
-          imgToDef = imgData[imgIdx, chanIdx,]
-          defX = defFields[imgIdx, chanIdx * 3,].detach()
-          defY = defFields[imgIdx, chanIdx * 3 + 1,].detach()
-          defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach()
-          imgDataDef = deform(imgToDef, defX, defY, defZ)
-          saveData(imgDataDef, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nii.gz')
-          saveData(getDefField(defX, defY, defZ), 'deformdationFieldDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nii.gz')
+          imgToDef = imgData[None, None, imgIdx, chanIdx,]
+          currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
+          currDefField[imgIdx,...,0] = zeroDefField[imgIdx,...,0] +  defFields[imgIdx, chanIdx * 3,].detach()
+          currDefField[imgIdx,...,1] = zeroDefField[imgIdx,...,1] +  defFields[imgIdx, chanIdx * 3 + 1,].detach()
+          currDefField[imgIdx,...,2] = zeroDefField[imgIdx,...,2] +  defFields[imgIdx, chanIdx * 3 + 2,].detach()
+          deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+
+          imgDataDef =  sitk.GetImageFromArray(deformedTmp[0,0,])
+          
+          saveData(imgDataDef, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd')
+          defX = defFields[imgIdx, chanIdx * 3,].detach() * (imgToDef.shape[2]/2)
+          defY = defFields[imgIdx, chanIdx * 3 + 1,].detach() * (imgToDef.shape[3]/2)
+          defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach() * (imgToDef.shape[4]/2)
+          defDataToSave = sitk.GetImageFromArray(getDefField(defX, defY, defZ),isVector=True)
+          saveData(defDataToSave, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd')
+
+def save_grad(name):
+    def hook(grad):
+        print(name)
+        print(torch.sum(grad))
+    return hook
   
 def trainNet(net, device, dataloader, epochs):
   net.to(device)
   optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
   lambda0 = 1
-  lambda1 = 0.1
+  lambda1 = 0.01
   criterion = torch.nn.MSELoss()
   for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
         # get the inputs
         imgData = data['image']
+        zeroDefField = getZeroDefField(imgData)
         labelData = data['label']
         maskData = data['mask']
         imgData = imgData.to(device)
+        zeroDefField = zeroDefField.to(device)
         
         # zero the parameter gradients
         optimizer.zero_grad()
 
         # forward + backward + optimize
         defFields = net(imgData)
-        imgDataDef = torch.zeros(imgData.shape, requires_grad=False)
+        defFields.register_hook(save_grad('defFields'))
+        imgDataDef = torch.empty(imgData.shape, device=device, requires_grad=False)
         for imgIdx in range(imgData.shape[0]):
           for chanIdx in range(-1,imgData.shape[1]-1):
-            imgToDef = imgData[imgIdx, chanIdx,]
-            defX = defFields[imgIdx, chanIdx * 3,].detach()
-            defY = defFields[imgIdx, chanIdx * 3 + 1,].detach()
-            defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach()
-            print(torch.sum(defX))
-            imgDataDef[imgIdx, chanIdx+1,] = torch.from_numpy(deform(imgToDef, defX, defY, defZ))
-        imgDataDef.requires_grad = True
-#         crossCorr = lf.normCrossCorr(imgData, imgDataDef)
-#         smoothnessDF = lf.smoothnessVecField(defFields)
-#         loss = lambda0 * crossCorr + lambda1 * smoothnessDF
-#         print('cc: %.3f smmothness: %.3f' % (crossCorr, smoothnessDF))
-#         print('loss: %.3f' % (loss))
-        
-        #TODO: there is no connection of imgData and imgDataDef to the net parameters as the
-        # calculatinos of image data def were peformed when grad = false
-        # reimplement method
-        loss = criterion(imgData, imgDataDef)
+            imgToDef = imgData[None, None, imgIdx, chanIdx,]
+            currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
+            currDefField[imgIdx,...,0] = zeroDefField[imgIdx,...,0] +  defFields[imgIdx, chanIdx * 3,]
+            currDefField[imgIdx,...,1] = zeroDefField[imgIdx,...,1] +  defFields[imgIdx, chanIdx * 3 + 1,]
+            currDefField[imgIdx,...,2] = zeroDefField[imgIdx,...,2] +  defFields[imgIdx, chanIdx * 3 + 2,]
+            deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+ 
+ 
+            imgDataDef[imgIdx, chanIdx+1,] = deformedTmp[0,0,]
+             
+             
+        crossCorr = lf.normCrossCorr(imgData, imgDataDef)
+        smoothnessDF = lf.smoothnessVecField(defFields, device)
+        loss = lambda0 * crossCorr + lambda1 * smoothnessDF
+        print('cc: %.3f smmothness: %.3f' % (crossCorr, smoothnessDF))
         print('loss: %.3f' % (loss))
-        
+         
+#         loss = crossCorr#criterion(imgData, imgDataDef)
+#         print('loss: %.3f' % (loss))
         loss.backward()
         optimizer.step()
 
@@ -128,7 +148,7 @@ def main(argv):
   torch.backends.cudnn.benchmark = False
   
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  device = "cpu" ## for testing 
+#   device = "cpu" ## for testing 
   print(device)
   
   
@@ -138,25 +158,24 @@ def main(argv):
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-#   for i_batch, sample_batched in enumerate(dataloader):
-#     print(i_batch, sample_batched['image'].shape)
-
+  numberOfEpochs = 200
   net = UNet(2, True, True, 3)
   print(net)
+
   start = time.time()
   if False: #device == "cpu":
     net.share_memory()
     processes = []
     num_processes=2
     for rank in range(num_processes):
-      p = mp.Process(target=trainNet, args=(net, device, dataloader, 50))
+      p = mp.Process(target=trainNet, args=(net, device, dataloader, numberOfEpochs))
       p.start()
       processes.append(p)
     for p in processes:
       p.join()
         
   else:
-    trainNet(net, device, dataloader, 50)
+    trainNet(net, device, dataloader, numberOfEpochs)
   end = time.time()
   print(end - start)
   testNet(net, device, dataloader)

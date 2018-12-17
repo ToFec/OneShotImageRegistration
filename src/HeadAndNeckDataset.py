@@ -2,6 +2,7 @@ import os.path
 import unicodecsv as csv
 from torch.utils.data import Dataset
 from medpy.io import load, save
+import SimpleITK as sitk
 import torch
 import numpy as np
 
@@ -107,7 +108,7 @@ class HeadAndNeckDataset(Dataset):
         return sample
 
 def saveData(data, filename):
-  save(data, filename)
+  sitk.WriteImage(data, filename)
       
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
