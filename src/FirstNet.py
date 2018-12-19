@@ -60,10 +60,13 @@ def save_grad(name):
   
 def trainNet(net, device, dataloader, epochs):
   net.to(device)
-  optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
+#   optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
+  optimizer = optim.Adam(net.parameters())
   lambda0 = 1
-  lambda1 = 0.01
-  criterion = torch.nn.MSELoss()
+  lambda1 = 0
+  lambda2 = 0
+  lambda3 = 1
+  
   for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
         # get the inputs
@@ -79,8 +82,11 @@ def trainNet(net, device, dataloader, epochs):
 
         # forward + backward + optimize
         defFields = net(imgData)
-        defFields.register_hook(save_grad('defFields'))
         imgDataDef = torch.empty(imgData.shape, device=device, requires_grad=False)
+        cycleIdx = torch.empty(defFields.shape, device=device)
+        
+        oldIdx = zeroDefField.clone()
+        
         for imgIdx in range(imgData.shape[0]):
           for chanIdx in range(-1,imgData.shape[1]-1):
             imgToDef = imgData[None, None, imgIdx, chanIdx,]
@@ -89,19 +95,32 @@ def trainNet(net, device, dataloader, epochs):
             currDefField[imgIdx,...,1] = zeroDefField[imgIdx,...,1] +  defFields[imgIdx, chanIdx * 3 + 1,]
             currDefField[imgIdx,...,2] = zeroDefField[imgIdx,...,2] +  defFields[imgIdx, chanIdx * 3 + 2,]
             deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
- 
- 
             imgDataDef[imgIdx, chanIdx+1,] = deformedTmp[0,0,]
-             
-             
+            
+            tmp0 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
+            cycleIdx[imgIdx, chanIdx * 3,] = tmp0[0,0,]
+            tmp1 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3 + 1,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
+            cycleIdx[imgIdx, chanIdx * 3 + 1,] = tmp1[0,0,]
+            tmp2 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3 + 2,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
+            cycleIdx[imgIdx, chanIdx * 3 + 2,] = tmp2[0,0,]
+            
+            oldIdx[imgIdx,...,0] = oldIdx[imgIdx,...,0] + defFields[imgIdx, chanIdx * 3,].detach()
+            oldIdx[imgIdx,...,1] = oldIdx[imgIdx,...,1] + defFields[imgIdx, chanIdx * 3 + 1,].detach()
+            oldIdx[imgIdx,...,2] = oldIdx[imgIdx,...,2] + defFields[imgIdx, chanIdx * 3 + 2,].detach()
+              
+              
         crossCorr = lf.normCrossCorr(imgData, imgDataDef)
-        smoothnessDF = lf.smoothnessVecField(defFields, device)
-        loss = lambda0 * crossCorr + lambda1 * smoothnessDF
-        print('cc: %.3f smmothness: %.3f' % (crossCorr, smoothnessDF))
+        if imgData.shape[1] > 3:
+          smoothnessDF = lf.smoothnessVecFieldT(defFields, device)
+        else:
+          smoothnessDF = lf.smoothnessVecField(defFields, device)
+        
+        vecLengthLoss = torch.abs(defFields).mean()
+        cycleLoss = lf.cycleLoss(cycleIdx, device)
+        loss = lambda0 * crossCorr + lambda1 * smoothnessDF + lambda2 * vecLengthLoss + lambda3 * cycleLoss
+        print('cc: %.3f smmothness: %.3f vecLength: %.3f cycleLoss: %.3f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
         print('loss: %.3f' % (loss))
-         
-#         loss = crossCorr#criterion(imgData, imgDataDef)
-#         print('loss: %.3f' % (loss))
+          
         loss.backward()
         optimizer.step()
 
@@ -127,38 +146,43 @@ def plotDataset(dataset):
 
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv,'',['trainingFiles=', 'valdiationFiles='])
+    opts, args = getopt.getopt(argv,'',['trainingFiles=', 'valdiationFiles=', 'device=', 'numberOfEpochs='])
   except getopt.GetoptError:
-    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv')
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500')
     return
     
   if not (len(opts)):
-    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv')
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500')
     return
+
+  device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+  numberOfEpochs = 500
     
   for opt, arg in opts:
     if opt == '--trainingFiles':
       trainingFileNamesCSV = arg
     elif opt == '--valdiationFiles':
       validationFileNamesCSV = arg
+    elif opt == '--device':
+      device = arg      
+    elif opt == '--numberOfEpochs':
+      numberOfEpochs = int(arg) 
       
   torch.manual_seed(0)
   np.random.seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
   
-  device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-#   device = "cpu" ## for testing 
+
   print(device)
   
   
   headAndNeckTrainSet = HeadAndNeckDataset(trainingFileNamesCSV,ToTensor())
-#   plotDataset(headAndNeckTrainSet)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-  numberOfEpochs = 200
+  
   net = UNet(2, True, True, 3)
   print(net)
 

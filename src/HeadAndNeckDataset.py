@@ -67,6 +67,8 @@ class HeadAndNeckDataset(Dataset):
     def loadData(self, trainingFileNames, maskFileNames, labelsFileNames):
       imgData = []
       for trainingFileName in trainingFileNames:
+        #https://na-mic.org/w/images/a/a7/SimpleITK_with_Slicer_HansJohnson.pdf
+        #sitk::ImagesitkImage=sitk::ReadImage(inputFilename)
         imgNii, imgHeader = load(trainingFileName)
         imgData.append(imgNii)
       imgData = np.stack(imgData)

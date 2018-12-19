@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 def dice_coeff(y_true, y_pred):
     smooth = 1.
@@ -13,28 +14,67 @@ def dice_coeff(y_true, y_pred):
 def dice_loss(y_true, y_pred):
     loss = 1 - dice_coeff(y_true, y_pred)
     return loss
-  
-def smoothnessVecField(vecFields, device):
-  criterion = torch.nn.SmoothL1Loss()
+
+#TODO:   
+def cycleLoss(vecFields, device):
   loss = torch.empty(vecFields.shape[0], device=device)
   for imgIdx in range(vecFields.shape[0]):
     vecField = vecFields[imgIdx]
-    idx = range(-1,vecField.shape[0]-1)
+     
+    dir0Idx = range(0,vecField.shape[0], 3)
+    dir1Idx = range(1,vecField.shape[0], 3)
+    dir2Idx = range(2,vecField.shape[0], 3)
+     
+    dir0Sum = torch.abs(torch.sum(vecField[dir0Idx,],dim=0))
+    dir1Sum = torch.abs(torch.sum(vecField[dir1Idx,],dim=0))
+    dir2Sum = torch.abs(torch.sum(vecField[dir2Idx,],dim=0))
+     
+    loss[imgIdx] = torch.mean(dir0Sum + dir1Sum + dir2Sum)
+  return loss.sum() / vecFields.shape[0]
+  
+def smoothnessVecField(vecFields, device):
+  loss = torch.empty(vecFields.shape[0], device=device)
+  for imgIdx in range(vecFields.shape[0]):
+    vecField = vecFields[imgIdx]
+
+    idx = np.roll(range(0,vecField.shape[1]),-1)
+    t = vecField[:,idx,:,:].detach()
+    loss1 = torch.abs(t - vecField)
     
+    idx = np.roll(range(0,vecField.shape[2]),-1)
+    t = vecField[:,:,idx,:].detach()
+    loss2 = torch.abs(t - vecField)
+    
+    idx = np.roll(range(0,vecField.shape[3]),-1)
+    t = vecField[:,:,:,idx].detach()
+    loss3 = torch.abs(t - vecField)
+    
+    loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+  return loss.sum() / vecFields.shape[0]
+
+def smoothnessVecFieldT(vecFields, device):
+  loss = torch.empty(vecFields.shape[0], device=device)
+  for imgIdx in range(vecFields.shape[0]):
+    vecField = vecFields[imgIdx]
+
+    idx = np.roll(range(0,vecField.shape[0]),-3)
     t = vecField[idx,:,:,:].detach()
-    loss0 = criterion(vecField[:,:,:,:], t)
+    loss0 = torch.abs(t - vecField)
     
-    t = vecField[:,1:,:,:].detach()
-    loss1 = criterion(vecField[:,:-1,:,:], t)
+    idx = np.roll(range(0,vecField.shape[1]),-1)
+    t = vecField[:,idx,:,:].detach()
+    loss1 = torch.abs(t - vecField)
     
-    t = vecField[:,:,1:,:].detach()
-    loss2 = criterion(vecField[:,:,:-1,:], t)
+    idx = np.roll(range(0,vecField.shape[2]),-1)
+    t = vecField[:,:,idx,:].detach()
+    loss2 = torch.abs(t - vecField)
     
-    t = vecField[:,:,:,1:].detach()
-    loss3 = criterion(vecField[:,:,:,:-1], t)
+    idx = np.roll(range(0,vecField.shape[3]),-1)
+    t = vecField[:,:,:,idx].detach()
+    loss3 = torch.abs(t - vecField)
     
-    loss[imgIdx]= loss0 + loss1 + loss2 + loss3
-  return loss.sum()
+    loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+  return loss.sum() / vecFields.shape[0]
   
   ## img0 and img1 must have the same shape
 def normCrossCorr(img0, img1):
