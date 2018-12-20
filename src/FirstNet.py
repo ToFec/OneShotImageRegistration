@@ -62,10 +62,10 @@ def trainNet(net, device, dataloader, epochs):
   net.to(device)
 #   optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
   optimizer = optim.Adam(net.parameters())
-  lambda0 = 1
-  lambda1 = 0
-  lambda2 = 0
-  lambda3 = 1
+  ccW = 1
+  smoothW = 0.5
+  vecLengthW = 0
+  cycleW = 1
   
   for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
@@ -83,30 +83,27 @@ def trainNet(net, device, dataloader, epochs):
         # forward + backward + optimize
         defFields = net(imgData)
         imgDataDef = torch.empty(imgData.shape, device=device, requires_grad=False)
-        cycleIdx = torch.empty(defFields.shape, device=device)
+        cycleImgData = torch.empty(defFields.shape, device=device)
         
-        oldIdx = zeroDefField.clone()
+#         cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
+        cycleIdxData = zeroDefField.clone()
         
-        for imgIdx in range(imgData.shape[0]):
-          for chanIdx in range(-1,imgData.shape[1]-1):
-            imgToDef = imgData[None, None, imgIdx, chanIdx,]
-            currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
-            currDefField[imgIdx,...,0] = zeroDefField[imgIdx,...,0] +  defFields[imgIdx, chanIdx * 3,]
-            currDefField[imgIdx,...,1] = zeroDefField[imgIdx,...,1] +  defFields[imgIdx, chanIdx * 3 + 1,]
-            currDefField[imgIdx,...,2] = zeroDefField[imgIdx,...,2] +  defFields[imgIdx, chanIdx * 3 + 2,]
-            deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
-            imgDataDef[imgIdx, chanIdx+1,] = deformedTmp[0,0,]
-            
-            tmp0 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
-            cycleIdx[imgIdx, chanIdx * 3,] = tmp0[0,0,]
-            tmp1 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3 + 1,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
-            cycleIdx[imgIdx, chanIdx * 3 + 1,] = tmp1[0,0,]
-            tmp2 = torch.nn.functional.grid_sample(defFields[None, None, imgIdx, chanIdx * 3 + 2,], oldIdx[None, imgIdx,], mode='bilinear', padding_mode='border')
-            cycleIdx[imgIdx, chanIdx * 3 + 2,] = tmp2[0,0,]
-            
-            oldIdx[imgIdx,...,0] = oldIdx[imgIdx,...,0] + defFields[imgIdx, chanIdx * 3,].detach()
-            oldIdx[imgIdx,...,1] = oldIdx[imgIdx,...,1] + defFields[imgIdx, chanIdx * 3 + 1,].detach()
-            oldIdx[imgIdx,...,2] = oldIdx[imgIdx,...,2] + defFields[imgIdx, chanIdx * 3 + 2,].detach()
+        for chanIdx in range(-1,imgData.shape[1]-1):
+          imgToDef = imgData[:, None, chanIdx,]
+          currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
+          currDefField[...,0] = zeroDefField[...,0] +  defFields[:, chanIdx * 3,]
+          currDefField[...,1] = zeroDefField[...,1] +  defFields[:, chanIdx * 3 + 1,]
+          currDefField[...,2] = zeroDefField[...,2] +  defFields[:, chanIdx * 3 + 2,]
+          
+          deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+          imgDataDef[:, chanIdx+1,] = deformedTmp[:,0,]
+          
+          chanRange = range(chanIdx * 3,chanIdx * 3 +3)
+          cycleImgData[:, chanRange,] = torch.nn.functional.grid_sample(defFields[:, chanRange,], cycleIdxData.clone(), mode='bilinear', padding_mode='border')            
+          
+          cycleIdxData[...,0] = cycleIdxData[...,0] + defFields[:, chanIdx * 3,].detach()
+          cycleIdxData[...,1] = cycleIdxData[...,1] + defFields[:, chanIdx * 3 + 1,].detach()
+          cycleIdxData[...,2] = cycleIdxData[...,2] + defFields[:, chanIdx * 3 + 2,].detach()
               
               
         crossCorr = lf.normCrossCorr(imgData, imgDataDef)
@@ -116,8 +113,8 @@ def trainNet(net, device, dataloader, epochs):
           smoothnessDF = lf.smoothnessVecField(defFields, device)
         
         vecLengthLoss = torch.abs(defFields).mean()
-        cycleLoss = lf.cycleLoss(cycleIdx, device)
-        loss = lambda0 * crossCorr + lambda1 * smoothnessDF + lambda2 * vecLengthLoss + lambda3 * cycleLoss
+        cycleLoss = lf.cycleLoss(cycleImgData, device)
+        loss = ccW * crossCorr + smoothW * smoothnessDF + vecLengthW * vecLengthLoss + cycleW * cycleLoss
         print('cc: %.3f smmothness: %.3f vecLength: %.3f cycleLoss: %.3f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
         print('loss: %.3f' % (loss))
           
