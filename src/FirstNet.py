@@ -12,7 +12,7 @@ import SimpleITK as sitk
 
 import time
 
-from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, saveData
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
 from Net import UNet
 import LossFunctions as lf
 
@@ -21,7 +21,7 @@ def imshow(img):
     npimg = img.numpy()
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     
-def testNet(net, device, dataloader):
+def testNet(net, device, dataloader, outputPath):
   net.to(device)
   net.eval()
   with torch.no_grad():
@@ -45,12 +45,12 @@ def testNet(net, device, dataloader):
 
           imgDataDef =  sitk.GetImageFromArray(deformedTmp[0,0,])
           
-          saveData(imgDataDef, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd')
+          dataloader.dataset.saveData(imgDataDef, outputPath, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd', i)
           defX = defFields[imgIdx, chanIdx * 3,].detach() * (imgToDef.shape[2]/2)
           defY = defFields[imgIdx, chanIdx * 3 + 1,].detach() * (imgToDef.shape[3]/2)
           defZ = defFields[imgIdx, chanIdx * 3 + 2,].detach() * (imgToDef.shape[4]/2)
           defDataToSave = sitk.GetImageFromArray(getDefField(defX, defY, defZ),isVector=True)
-          saveData(defDataToSave, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd')
+          dataloader.dataset.saveData(defDataToSave, outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx)+ 'channel' + str(chanIdx) + '.nrrd')
 
 def save_grad(name):
     def hook(grad):
@@ -143,18 +143,19 @@ def plotDataset(dataset):
 
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv,'',['trainingFiles=', 'valdiationFiles=', 'device=', 'numberOfEpochs='])
+    opts, args = getopt.getopt(argv,'',['trainingFiles=', 'valdiationFiles=', 'device=', 'numberOfEpochs=', 'outputPath='])
   except getopt.GetoptError:
-    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500')
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH')
     return
     
   if not (len(opts)):
-    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500')
+    print('FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH')
     return
 
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
   numberOfEpochs = 500
-    
+  
+  outputPath = 'RegResults'  
   for opt, arg in opts:
     if opt == '--trainingFiles':
       trainingFileNamesCSV = arg
@@ -162,6 +163,8 @@ def main(argv):
       validationFileNamesCSV = arg
     elif opt == '--device':
       device = arg      
+    elif opt == '--outputPath':
+      outputPath = arg      
     elif opt == '--numberOfEpochs':
       numberOfEpochs = int(arg) 
       
@@ -180,7 +183,7 @@ def main(argv):
                         shuffle=False, num_workers=0)
   
   
-  net = UNet(2, True, True, 3)
+  net = UNet(headAndNeckTrainSet.getChannels(), True, True, 3)
   print(net)
 
   start = time.time()
@@ -199,7 +202,7 @@ def main(argv):
     trainNet(net, device, dataloader, numberOfEpochs)
   end = time.time()
   print(end - start)
-  testNet(net, device, dataloader)
+  testNet(net, device, dataloader,outputPath)
 
 if __name__ == "__main__":
   main(sys.argv[1:])  

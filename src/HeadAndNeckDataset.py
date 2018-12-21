@@ -1,7 +1,6 @@
-import os.path
+import os
 import unicodecsv as csv
 from torch.utils.data import Dataset
-from medpy.io import load, save
 import SimpleITK as sitk
 import torch
 import numpy as np
@@ -14,6 +13,7 @@ class HeadAndNeckDataset(Dataset):
         self.transform = transform
         self.loadOnInstantiation = loadOnInstantiation
         csvtrainingFiles =  open(csv_file, 'rb')
+        self.meansAndStds = {}
         try:        
           trianingCSVFileReader = csv.reader(csvtrainingFiles, delimiter=';', encoding='iso8859_15')
           if (self.loadOnInstantiation):
@@ -30,22 +30,23 @@ class HeadAndNeckDataset(Dataset):
             labelFiles = []
             i = 0
             while (True):
-              trainingFileName = trainingFilePath[0] + '/img' + str(i) + '.nii.gz'
+              trainingFileName = trainingFilePath[0] + os.path.sep +'img' + str(i) + '.nii.gz'
               if (os.path.isfile(trainingFileName)):
                 imgFiles.append(trainingFileName)
               else:
                 break
                 
-              maskFileName = trainingFilePath[0] + '/mask' + str(i) + '.nii.gz'
+              maskFileName = trainingFilePath[0] + os.path.sep + 'mask' + str(i) + '.nii.gz'
               if (os.path.isfile(maskFileName)):
                 maskFiles.append(maskFileName)
-              labelsFileName = trainingFilePath[0] + '/struct' + str(i) + '.nii.gz'  
+              labelsFileName = trainingFilePath[0] + os.path.sep + 'struct' + str(i) + '.nii.gz'  
               if (os.path.isfile(labelsFileName)):
                 labelFiles.append(labelsFileName)
               i=i+1
             
+            self.channels = len(imgFiles)
             if (self.loadOnInstantiation):
-              sample = self.loadData(imgFiles, maskFiles, labelFiles)
+              sample = self.loadData(imgFiles, maskFiles, labelFiles, idx)
               self.loadedIgSamples[idx] = sample
               idx = idx + 1
             else:
@@ -64,28 +65,38 @@ class HeadAndNeckDataset(Dataset):
     def __len__(self):
         return self.length
     
-    def loadData(self, trainingFileNames, maskFileNames, labelsFileNames):
+    def getChannels(self):
+      return self.channels;
+    
+    def loadData(self, trainingFileNames, maskFileNames, labelsFileNames, idx):
       imgData = []
       for trainingFileName in trainingFileNames:
         #https://na-mic.org/w/images/a/a7/SimpleITK_with_Slicer_HansJohnson.pdf
-        #sitk::ImagesitkImage=sitk::ReadImage(inputFilename)
-        imgNii, imgHeader = load(trainingFileName)
+        tmp = sitk.ReadImage(str(trainingFileName))
+        imgNii = sitk.GetArrayFromImage(tmp)
+#         imgNii, imgHeader = load(trainingFileName)
         imgData.append(imgNii)
       imgData = np.stack(imgData)
-      imgData = imgData - imgData.mean()
-      imgData = imgData / imgData.std()
+      imgMean = imgData.mean()
+      imgData = imgData - imgMean
+      imgStd = imgData.std()
+      imgData = imgData / imgStd
+      
+      self.meansAndStds[idx] = (imgMean, imgStd)
         
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
         for maskFileName in maskFileNames:
-          maskNii, maskHeader = load(maskFileName)
+          tmp = sitk.ReadImage(str(maskFileName))
+          maskNii = sitk.GetArrayFromImage(tmp)
           maskData.append(maskNii)
         maskData = np.stack(maskData)
       
       labelData = []
       if (len(trainingFileNames) == len(labelsFileNames)):
         for labelsFileName in labelsFileNames:
-          labelsNii, labelsHeader = load(labelsFileName)
+          tmp = sitk.ReadImage(str(labelsFileName))
+          labelsNii = sitk.GetArrayFromImage(tmp)
           labelData.append(labelsNii)
         labelData = np.stack(labelData)
 
@@ -103,14 +114,18 @@ class HeadAndNeckDataset(Dataset):
           trainingFileNames = self.dataFileList[idx]
           maskFileNames = self.maskFileList[idx]
           labelsFileNames = self.labelFileList[idx]
-          sample = self.loadData(trainingFileNames, maskFileNames, labelsFileNames)
-          if self.transform:
-            sample = self.transform(sample)
+          sample = self.loadData(trainingFileNames, maskFileNames, labelsFileNames, idx)
 
         return sample
 
-def saveData(data, filename):
-  sitk.WriteImage(data, filename)
+    def saveData(self, data, path,  filename, idx = -1):
+      if idx > -1:
+        (imgMean, imgStd) = self.meansAndStds[idx]
+        data = data * imgStd
+        data = data + imgMean
+      if not os.path.isdir(path):
+        os.makedirs(path)
+      sitk.WriteImage(data, path + os.path.sep + filename)
       
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""

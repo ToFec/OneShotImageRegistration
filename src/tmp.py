@@ -3,12 +3,12 @@ from Utils import deform, getDefField
 import numpy as np
 import LossFunctions as lf
 import torch
-from HeadAndNeckDataset import saveData
+from HeadAndNeckDataset import HeadAndNeckDataset
 import SimpleITK as sitk
 
-imgpath = '/home/fechter/workspace/TorchSandbox/resources/Data00/img0.nii.gz'
-defFieldpath = '/home/fechter/workspace/TorchSandbox/resources/Data00/def0.nii.gz'
-refPath = '/home/fechter/workspace/TorchSandbox/resources/Data00/img1.nii.gz'
+imgpath = '/home/fechter/workspace/TorchSandbox/resources/4DDataset/img0.nii.gz'
+defFieldpath = '/home/fechter/workspace/TorchSandbox/resources/4DDataset/def0.nii.gz'
+refPath = '/home/fechter/workspace/TorchSandbox/resources/4DDataset/img1.nii.gz'
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -16,6 +16,7 @@ torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
 imgNii, imgHeader = load(imgpath)
+tmp =sitk.ReadImage(imgpath)
 refImgNii, refImgHeader = load(refPath)
 defFieldNii, defFieldHeader = load(defFieldpath)
 
