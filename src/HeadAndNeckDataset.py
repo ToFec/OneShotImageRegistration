@@ -34,12 +34,23 @@ class HeadAndNeckDataset(Dataset):
               if (os.path.isfile(trainingFileName)):
                 imgFiles.append(trainingFileName)
               else:
-                break
+                trainingFileName = trainingFilePath[0] + os.path.sep +'img' + str(i) + '.nrrd'
+                if (os.path.isfile(trainingFileName)):
+                  imgFiles.append(trainingFileName)
+                else:
+                  break
                 
               maskFileName = trainingFilePath[0] + os.path.sep + 'mask' + str(i) + '.nii.gz'
               if (os.path.isfile(maskFileName)):
                 maskFiles.append(maskFileName)
+              maskFileName = trainingFilePath[0] + os.path.sep + 'mask' + str(i) + '.nrrd'
+              if (os.path.isfile(maskFileName)):
+                maskFiles.append(maskFileName)
+              
               labelsFileName = trainingFilePath[0] + os.path.sep + 'struct' + str(i) + '.nii.gz'  
+              if (os.path.isfile(labelsFileName)):
+                labelFiles.append(labelsFileName)
+              labelsFileName = trainingFilePath[0] + os.path.sep + 'struct' + str(i) + '.nrrd'  
               if (os.path.isfile(labelsFileName)):
                 labelFiles.append(labelsFileName)
               i=i+1

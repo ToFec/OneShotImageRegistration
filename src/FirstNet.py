@@ -62,10 +62,10 @@ def trainNet(net, device, dataloader, epochs):
   net.to(device)
 #   optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
   optimizer = optim.Adam(net.parameters())
-  ccW = 1
-  smoothW = 0.5
-  vecLengthW = 0
-  cycleW = 1
+  ccW = 0.79
+  smoothW = 0.1
+  vecLengthW = 0.01
+  cycleW = 0.1
   
   for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
