@@ -6,7 +6,7 @@ from EncoderBrick import EncoderBrick
 from DecoderBrick import DecoderBrick
 
 class UNet(nn.Module):
-  def __init__(self, in_channels=2, useBatchNorm=True, concatLayer=True, depth = 5):
+  def __init__(self, in_channels=2, useBatchNorm=True, concatLayer=True, depth = 5, numberOfFiltersFirstLayer=32):
     super(UNet, self).__init__()
     
     if (depth < 2):
@@ -21,7 +21,6 @@ class UNet(nn.Module):
     self.pools = []
     
     self.depth = depth
-    numberOfFiltersFirstLayer=32
     for i in range(self.depth):
       currentNumberOfInputChannels = self.in_channels if i == 0 else outputFilterNumber
       outputFilterNumber = numberOfFiltersFirstLayer*(2**i)

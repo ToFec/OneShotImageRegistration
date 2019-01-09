@@ -88,7 +88,6 @@ def normCrossCorr(img0, img1):
       x = torch.nn.functional.normalize(x,2,-1)
       y = torch.nn.functional.normalize(y,2,-1)
       dotProd = torch.dot(x,y) + 1
-      #dotProd = dotProd * dotProd
       result = result + dotProd
   return 1 - (result / (2 * img0.shape[0] * img0.shape[1]))
   

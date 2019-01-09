@@ -81,9 +81,14 @@ def trainNet(net, device, dataloader, epochs):
         optimizer.zero_grad()
 
         # forward + backward + optimize
+        print(torch.cuda.memory_allocated())
         defFields = net(imgData)
+        print(torch.cuda.memory_allocated())
+        
         imgDataDef = torch.empty(imgData.shape, device=device, requires_grad=False)
+        
         cycleImgData = torch.empty(defFields.shape, device=device)
+        
         
 #         cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
         cycleIdxData = zeroDefField.clone()
@@ -99,8 +104,9 @@ def trainNet(net, device, dataloader, epochs):
           imgDataDef[:, chanIdx+1,] = deformedTmp[:,0,]
           
           chanRange = range(chanIdx * 3,chanIdx * 3 +3)
-          cycleImgData[:, chanRange,] = torch.nn.functional.grid_sample(defFields[:, chanRange,], cycleIdxData.clone(), mode='bilinear', padding_mode='border')            
           
+          cycleImgData[:, chanRange,] = torch.nn.functional.grid_sample(defFields[:, chanRange,], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
+                      
           cycleIdxData[...,0] = cycleIdxData[...,0] + defFields[:, chanIdx * 3,].detach()
           cycleIdxData[...,1] = cycleIdxData[...,1] + defFields[:, chanIdx * 3 + 1,].detach()
           cycleIdxData[...,2] = cycleIdxData[...,2] + defFields[:, chanIdx * 3 + 2,].detach()
@@ -183,7 +189,7 @@ def main(argv):
                         shuffle=False, num_workers=0)
   
   
-  net = UNet(headAndNeckTrainSet.getChannels(), True, True, 3)
+  net = UNet(headAndNeckTrainSet.getChannels(), True, True, 3, 4)
   print(net)
 
   start = time.time()

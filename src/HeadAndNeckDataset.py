@@ -87,13 +87,10 @@ class HeadAndNeckDataset(Dataset):
         imgNii = sitk.GetArrayFromImage(tmp)
 #         imgNii, imgHeader = load(trainingFileName)
         imgData.append(imgNii)
-      imgData = np.stack(imgData)
-      imgMean = imgData.mean()
-      imgData = imgData - imgMean
-      imgStd = imgData.std()
-      imgData = imgData / imgStd
+      imgData = np.stack(imgData).astype('float32')
+      imgData = imgData[:,:(imgData.shape[1]/2)*2,:(imgData.shape[2]/2)*2,:(imgData.shape[3]/2)*2]
       
-      self.meansAndStds[idx] = (imgMean, imgStd)
+      
         
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
@@ -102,6 +99,22 @@ class HeadAndNeckDataset(Dataset):
           maskNii = sitk.GetArrayFromImage(tmp)
           maskData.append(maskNii)
         maskData = np.stack(maskData)
+        
+#make dimensions even; otehrwise there are probs with average pooling and upsampling         
+        maskData = maskData[:,:(maskData.shape[1]/2)*2,:(maskData.shape[2]/2)*2,:(maskData.shape[3]/2)*2]
+        
+        imgMean = imgData[maskData > 0].mean()
+        imgData = imgData - imgMean
+        imgStd = imgData[maskData > 0].std()
+        imgData = imgData / imgStd
+        imgData[maskData == 0] = 0
+        self.meansAndStds[idx] = (imgMean, imgStd)
+      else:
+        imgMean = imgData.mean()
+        imgData = imgData - imgMean
+        imgStd = imgData.std()
+        imgData = imgData / imgStd
+        self.meansAndStds[idx] = (imgMean, imgStd)
       
       labelData = []
       if (len(trainingFileNames) == len(labelsFileNames)):
