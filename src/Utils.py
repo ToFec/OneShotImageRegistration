@@ -34,5 +34,6 @@ def getZeroDefField(image0):
   grid0, grid1, grid2 = np.meshgrid(m0,m1,m2,indexing='ij')
   defField = np.stack([grid2, grid1, grid0], axis=3)
   defField = np.expand_dims(defField, axis=0)
+  defField = np.tile(defField, (image0.shape[0],1,1,1,1))
   defField = torch.from_numpy(defField)
   return defField

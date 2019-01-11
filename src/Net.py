@@ -24,10 +24,10 @@ class UNet(nn.Module):
     for i in range(self.depth):
       currentNumberOfInputChannels = self.in_channels if i == 0 else outputFilterNumber
       outputFilterNumber = numberOfFiltersFirstLayer*(2**i)
-      self.encoders.append( EncoderBrick(outputFilterNumber, currentNumberOfInputChannels) )
+      self.encoders.append( EncoderBrick(outputFilterNumber, currentNumberOfInputChannels, self.useBatchNorm, self.concatLayer) )
       if ( i < self.depth-1):
         self.pools.append( nn.AvgPool3d(2, 2) )
-        self.decoders.append( DecoderBrick(outputFilterNumber, outputFilterNumber*2) )
+        self.decoders.append( DecoderBrick(outputFilterNumber, outputFilterNumber*2, self.useBatchNorm, self.concatLayer) )
         
     self.encoders = nn.ModuleList(self.encoders)
     self.decoders = nn.ModuleList(self.decoders)
@@ -41,15 +41,15 @@ class UNet(nn.Module):
     encoder_outs = []
      
     for i, encoder in enumerate(self.encoders):
-        x = encoder(x)
-        encoder_outs.append(x)
-        if ( i < self.depth-1):
-          x = self.pools[i](x)
+      x = encoder(x)
+      encoder_outs.append(x)
+      if ( i < self.depth-1):
+        x = self.pools[i](x)
         
     for i in range(len(self.decoders) -1, -1, -1):
-        decoder = self.decoders[i]
-        encOut = encoder_outs[i]
-        x = decoder(x, encOut)
+      decoder = self.decoders[i]
+      encOut = encoder_outs[i]
+      x = decoder(x, encOut)
     
     x = self.outputConv(x)
     return x

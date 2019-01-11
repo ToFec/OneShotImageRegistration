@@ -71,7 +71,6 @@ class HeadAndNeckDataset(Dataset):
             self.length = len(self.dataFileList)
         finally:
           csvtrainingFiles.close()
-          
 
     def __len__(self):
         return self.length
@@ -85,8 +84,9 @@ class HeadAndNeckDataset(Dataset):
         #https://na-mic.org/w/images/a/a7/SimpleITK_with_Slicer_HansJohnson.pdf
         tmp = sitk.ReadImage(str(trainingFileName))
         imgNii = sitk.GetArrayFromImage(tmp)
-#         imgNii, imgHeader = load(trainingFileName)
+
         imgData.append(imgNii)
+        
       imgData = np.stack(imgData).astype('float32')
       imgData = imgData[:,:(imgData.shape[1]/2)*2,:(imgData.shape[2]/2)*2,:(imgData.shape[3]/2)*2]
       
@@ -123,6 +123,7 @@ class HeadAndNeckDataset(Dataset):
           labelsNii = sitk.GetArrayFromImage(tmp)
           labelData.append(labelsNii)
         labelData = np.stack(labelData)
+        labelData = labelData[:,:(labelData.shape[1]/2)*2,:(labelData.shape[2]/2)*2,:(labelData.shape[3]/2)*2]
 
       sample = {'image': imgData, 'label': labelData, 'mask': maskData}
       if self.transform:
