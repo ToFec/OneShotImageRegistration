@@ -27,13 +27,13 @@ def getDefField(x1, y1, z1):
   return defField
 
 #deformation field for grid_sample function with zero deformation
-def getZeroDefField(image0):
-  m0=np.linspace(-1, 1, image0.shape[2], dtype=np.float32)
-  m1=np.linspace(-1, 1, image0.shape[3], dtype=np.float32)
-  m2=np.linspace(-1, 1, image0.shape[4], dtype=np.float32)
+def getZeroDefField(imagShape):
+  m0=np.linspace(-1, 1, imagShape[2], dtype=np.float32)
+  m1=np.linspace(-1, 1, imagShape[3], dtype=np.float32)
+  m2=np.linspace(-1, 1, imagShape[4], dtype=np.float32)
   grid0, grid1, grid2 = np.meshgrid(m0,m1,m2,indexing='ij')
   defField = np.stack([grid2, grid1, grid0], axis=3)
   defField = np.expand_dims(defField, axis=0)
-  defField = np.tile(defField, (image0.shape[0],1,1,1,1))
+  defField = np.tile(defField, (imagShape[0],1,1,1,1))
   defField = torch.from_numpy(defField)
   return defField

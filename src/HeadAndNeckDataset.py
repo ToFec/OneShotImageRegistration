@@ -14,6 +14,8 @@ class HeadAndNeckDataset(Dataset):
         self.loadOnInstantiation = loadOnInstantiation
         csvtrainingFiles =  open(csv_file, 'rb')
         self.meansAndStds = {}
+        self.spacings = {}
+        self.origins = {}
         try:        
           trianingCSVFileReader = csv.reader(csvtrainingFiles, delimiter=';', encoding='iso8859_15')
           if (self.loadOnInstantiation):
@@ -80,18 +82,34 @@ class HeadAndNeckDataset(Dataset):
     
     def loadData(self, trainingFileNames, maskFileNames, labelsFileNames, idx):
       imgData = []
+      spacing = []
+      origin = []
       for trainingFileName in trainingFileNames:
         #https://na-mic.org/w/images/a/a7/SimpleITK_with_Slicer_HansJohnson.pdf
         tmp = sitk.ReadImage(str(trainingFileName))
         imgNii = sitk.GetArrayFromImage(tmp)
-
+        curSpacing = tmp.GetSpacing()
+        if (len(spacing)):
+          if(curSpacing != spacing):
+            print('Error: input images do not have same voxel spacing.')
+        else:
+          spacing = curSpacing
+          
+        curOrigin = tmp.GetOrigin()
+        if (len(origin)):
+          if(curOrigin != origin):
+            print('Error: input images do not have same voxel spacing.')
+        else:
+          origin = curOrigin
+          
         imgData.append(imgNii)
+        self.spacings[idx] = spacing
+        self.origins[idx] = origin
         
       imgData = np.stack(imgData).astype('float32')
       imgData = imgData[:,:(imgData.shape[1]/2)*2,:(imgData.shape[2]/2)*2,:(imgData.shape[3]/2)*2]
       
       
-        
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
         for maskFileName in maskFileNames:
@@ -143,11 +161,14 @@ class HeadAndNeckDataset(Dataset):
 
         return sample
 
-    def saveData(self, data, path,  filename, idx = -1):
+    def saveData(self, data, path,  filename, idx = -1, meanSubtract = True):
       if idx > -1:
-        (imgMean, imgStd) = self.meansAndStds[idx]
-        data = data * imgStd
-        data = data + imgMean
+        if (data.GetPixelIDValue() < 12 and meanSubtract):
+          (imgMean, imgStd) = self.meansAndStds[idx]
+          data = data * imgStd
+          data = data + imgMean
+        data.SetSpacing(self.spacings[idx])
+        data.SetOrigin(self.origins[idx])
       if not os.path.isdir(path):
         os.makedirs(path)
       sitk.WriteImage(data, path + os.path.sep + filename)
