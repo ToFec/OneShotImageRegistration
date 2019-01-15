@@ -308,8 +308,8 @@ def main(argv):
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-  net = UNet(headAndNeckTrainSet.getChannels(), True, False, 3)
-  
+  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
+  print(net)
   if not os.path.isdir(outputPath):
     os.makedirs(outputPath)
   modelFileName = outputPath + os.path.sep + 'UNetfinalParams.pt'
