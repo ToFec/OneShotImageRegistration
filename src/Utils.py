@@ -1,6 +1,7 @@
 import numpy as np
 import SimpleITK as sitk
 import torch
+from GaussSmoothing import GaussianSmoothing
 
 def deform(inputVol, x1, y1, z1):
   ##http://simpleitk.github.io/SimpleITK-Notebooks/01_Image_Basics.html
@@ -37,3 +38,56 @@ def getZeroDefField(imagShape):
   defField = np.tile(defField, (imagShape[0],1,1,1,1))
   defField = torch.from_numpy(defField)
   return defField
+
+def smoothArray3D(inputArray, device):
+    smoothing = GaussianSmoothing(1, 5, 2, 3, device)
+    input = torch.nn.functional.pad(inputArray, (2,2,2,2,2,2))
+    input = input[None, None, ]
+    input = smoothing(input)
+    input = torch.nn.functional.pad(input, (2,2,2,2,2,2))
+    return smoothing(input)[0,0]
+  
+def getMaxIdxs(imgShape, imgPatchSize):
+  if imgShape[2] - imgPatchSize > 0:
+    maxidx0 = imgShape[2] - imgPatchSize + 1
+  else:
+    maxidx0 = 1
+  
+  if imgShape[3] - imgPatchSize > 0:
+    maxidx1 = imgShape[3] - imgPatchSize + 1
+  else:
+    maxidx1 =  1
+  
+  if imgShape[4] - imgPatchSize > 0:
+    maxidx2 = imgShape[4] - imgPatchSize + 1
+  else:
+    maxidx2 = 1
+  return (maxidx0, maxidx1, maxidx2)
+
+def getPatchSize(imgShape, imgPatchSize):
+  if imgShape[2] - imgPatchSize > 0:
+    patchSize0 = imgPatchSize
+  else:
+    patchSize0 = imgShape[2]
+  
+  if imgShape[3] - imgPatchSize > 0:
+    patchSize1 = imgPatchSize
+  else:
+    patchSize1 = imgShape[3]
+  
+  if imgShape[4] - imgPatchSize > 0:
+    patchSize2 = imgPatchSize
+  else:
+    patchSize2 = imgShape[4]  
+    
+  return (patchSize0, patchSize1, patchSize2)
+
+def deformImage(imgToDef, defFields, device):
+  zeroDefField = getZeroDefField(imgToDef.shape)
+  zeroDefField = zeroDefField.to(device)  
+  currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
+  currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach()
+  currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach()
+  currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach()
+  deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+  return deformedTmp

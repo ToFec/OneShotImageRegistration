@@ -7,30 +7,25 @@ import torch.multiprocessing as mp
 import os
 import sys, getopt
 import numpy as np
-from Utils import deform, getDefField, getZeroDefField
+from Utils import getDefField, getZeroDefField, smoothArray3D, getMaxIdxs, getPatchSize, deformImage
 import SimpleITK as sitk
+import unicodecsv as csv
 
 import time
 
-from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
-from GaussSmoothing import GaussianSmoothing
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, PointReader
 from Net import UNet
 import LossFunctions as lf
 from Visualize import plotImageData
+import Options as userOpts
+from numpy import subtract
 
-def smoothArray3D(inputArray, device):
-    smoothing = GaussianSmoothing(1, 5, 2, 3, device)
-    input = nn.functional.pad(inputArray, (2,2,2,2,2,2))
-    input = input[None, None, ]
-    input = smoothing(input)
-    input = nn.functional.pad(input, (2,2,2,2,2,2))
-    return smoothing(input)[0,0]
 
-def testNet(net, device, dataloader, outputPath):
-  net.to(device)
+def testNet(net, dataloader, userOpts):
+  net.to(userOpts.device)
   net.eval()
   
-  patchSize = 64
+  patchSize = userOpts.patchSize
   
   with torch.no_grad():
     for i, data in enumerate(dataloader, 0):
@@ -39,7 +34,7 @@ def testNet(net, device, dataloader, outputPath):
       maskData = data['mask']
       
       imgShape = imgData.shape
-      imgData = imgData.to(device)
+      imgData = imgData.to(userOpts.device)
       
       if (maskData.dim() != imgData.dim()):
         maskData = torch.ones(imgShape, dtype=torch.int8)
@@ -47,8 +42,8 @@ def testNet(net, device, dataloader, outputPath):
       maxIdxs = getMaxIdxs(imgShape, patchSize)
       patchSizes = getPatchSize(imgShape, patchSize)
       
-      defFields = torch.zeros((imgShape[0], imgShape[1] * 3, imgShape[2], imgShape[3], imgShape[4]), device=device, requires_grad=False)
-      indexArray = torch.zeros((imgShape[2], imgShape[3], imgShape[4]), device=device, requires_grad=False)
+      defFields = torch.zeros((imgShape[0], imgShape[1] * 3, imgShape[2], imgShape[3], imgShape[4]), device=userOpts.device, requires_grad=False)
+      indexArray = torch.zeros((imgShape[2], imgShape[3], imgShape[4]), device=userOpts.device, requires_grad=False)
       for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]):
         for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]):
           for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]):
@@ -63,7 +58,7 @@ def testNet(net, device, dataloader, outputPath):
       startidx1 = patchSizes[1] / 2 if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else leftover1
       leftover2 = imgShape[4] % patchSizes[2]
       startidx2 = patchSizes[2] / 2 if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else leftover2
-            
+      
       if (startidx2 + startidx1 + startidx0 > 0) :               
         for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]):
           for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]):
@@ -76,87 +71,37 @@ def testNet(net, device, dataloader, outputPath):
       del maskData, subImgData
        
       indexArray[indexArray < 1] = 1
-      indexArray = smoothArray3D(indexArray, device)
       
       for dim0 in range(0, defFields.shape[0]):
         for dim1 in range(0, defFields.shape[1]):
-          defFields[dim0, dim1, ] /= indexArray
-
-      itkIndexArray = sitk.GetImageFromArray(indexArray)
-      dataloader.dataset.saveData(itkIndexArray, outputPath, 'indexArray' + str(i) + '.nrrd', i, False)
+          defFieldsTmp = defFields[dim0, dim1, ] / indexArray
+          defFields[dim0, dim1, ] = smoothArray3D(defFieldsTmp, userOpts.device)
 
       del indexArray
       
       zeroDefField = getZeroDefField(imgShape)
-      zeroDefField = zeroDefField.to(device)
+      zeroDefField = zeroDefField.to(userOpts.device)
       for imgIdx in range(imgShape[0]):
         for chanIdx in range(-1, imgShape[1] - 1):
           imgToDef = imgData[None, None, imgIdx, chanIdx, ]
           chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-          deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], device)
+          deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], userOpts.device)
           
           imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ])
+          imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
           
-          dataloader.dataset.saveData(imgDataDef, outputPath, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i)
+          dataloader.dataset.saveData(imgDataDef, userOpts.outputPath, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
+          dataloader.dataset.saveData(imgDataOrig, userOpts.outputPath, 'origImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
           defX = defFields[imgIdx, chanIdx * 3, ].detach() * (imgToDef.shape[2] / 2)
           defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * (imgToDef.shape[3] / 2)
           defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * (imgToDef.shape[4] / 2)
           defDataToSave = sitk.GetImageFromArray(getDefField(defX, defY, defZ), isVector=True)
-          dataloader.dataset.saveData(defDataToSave, outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i)
+          dataloader.dataset.saveData(defDataToSave, userOpts.outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
 
 
-def deformImage(imgToDef, defFields, device):
-  zeroDefField = getZeroDefField(imgToDef.shape)
-  zeroDefField = zeroDefField.to(device)  
-  currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
-  currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach()
-  currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach()
-  currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach()
-  deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
-  return deformedTmp
-  
-
-def getMaxIdxs(imgShape, imgPatchSize):
-  if imgShape[2] - imgPatchSize > 0:
-    maxidx0 = imgShape[2] - imgPatchSize
-  else:
-    maxidx0 = 1
-  
-  if imgShape[3] - imgPatchSize > 0:
-    maxidx1 = imgShape[3] - imgPatchSize
-  else:
-    maxidx1 =  1
-  
-  if imgShape[4] - imgPatchSize > 0:
-    maxidx2 = imgShape[4] - imgPatchSize
-  else:
-    maxidx2 = 1
-  return (maxidx0, maxidx1, maxidx2)
-
-def getPatchSize(imgShape, imgPatchSize):
-  if imgShape[2] - imgPatchSize > 0:
-    patchSize0 = imgPatchSize
-  else:
-    patchSize0 = imgShape[2]
-  
-  if imgShape[3] - imgPatchSize > 0:
-    patchSize1 = imgPatchSize
-  else:
-    patchSize1 = imgShape[3]
-  
-  if imgShape[4] - imgPatchSize > 0:
-    patchSize2 = imgPatchSize
-  else:
-    patchSize2 = imgShape[4]  
-    
-  return (patchSize0, patchSize1, patchSize2)
-
-
-indexArrayTest=[]
-
+# indexArrayTest=[]
 def getIndicesForRandomization(maskData, imgData, imgPatchSize):
   maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
-  print(maxIdxs)
   if (maskData.dim() == imgData.dim()):
     maskDataCrop = maskData[:, :, 0:maxIdxs[0], 0:maxIdxs[1], 0:maxIdxs[2]]
   else: 
@@ -164,10 +109,7 @@ def getIndicesForRandomization(maskData, imgData, imgPatchSize):
   
   maskChanSum = torch.sum(maskDataCrop, 1)
   idxs = np.where(maskChanSum > 0)
-  print(min(idxs[0]))
-  print(min(idxs[1]))
-  print(min(idxs[2]))
-  print(min(idxs[3]))
+
   return idxs
 
 
@@ -198,10 +140,7 @@ def getRandomSubSamples(numberofSamplesPerRun, idxs, patchSizes, imgData, labelD
     idx3 = idxs[2][randSampleIdxs[j]]
     idx4 = idxs[3][randSampleIdxs[j]]
     imgDataNew[j, ] = imgData[idx0, : , idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]]
-    
-    global indexArrayTest
-    indexArrayTest[idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]] += 1
-    
+#     indexArrayTest[idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]] += 1
     if (labelData.dim() == imgData.dim()):
       labelDataNew[j, ] = labelData[idx0, : , idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]]
   
@@ -251,25 +190,31 @@ def optimizeNet(net, imgDataToWork, labelToWork, device, optimizer, lossWeights)
   else:
     smoothnessDF = lf.smoothnessVecField(defFields, device)
   
-  vecLengthLoss = torch.abs(defFields).mean()
+  vecLengthLoss = lf.vecLength(defFields)
   cycleLoss = lf.cycleLoss(cycleImgData, device)
   loss = lossWeights['ccW'] * crossCorr + lossWeights['smoothW'] * smoothnessDF + lossWeights['vecLengthW'] * vecLengthLoss + lossWeights['cycleW'] * cycleLoss
-  print('cc: %.3f smmothness: %.3f vecLength: %.3f cycleLoss: %.3f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
+  print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
+  print('loss: %.3f' % (loss))
   print('loss: %.3f' % (loss))
     
   loss.backward()
   optimizer.step()    
   
-def trainNet(net, device, dataloader, epochs):
-  net.to(device)
+def trainNet(net, dataloader, userOpts):
+  net.to(userOpts.device)
 #   optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9)
   optimizer = optim.Adam(net.parameters())
-  lossWeights = {'ccW' : 0.79, 'smoothW' : 0.1, 'vecLengthW' : 0.01, 'cycleW' : 0.1}
+  #lossWeights = {'ccW' : 0.8, 'smoothW' : 0.1, 'vecLengthW' : 0.1, 'cycleW' : 0.0}
+  lossWeights = {'ccW' : userOpts.ccW, 'smoothW' : userOpts.smoothW, 'vecLengthW' : userOpts.vecLengthW, 'cycleW' : userOpts.cycleW}
+  imgPatchSize = userOpts.patchSize
   
-  imgPatchSize = 64
-  maxNumberOfPixs = imgPatchSize * imgPatchSize * imgPatchSize * 10 + 1
-  maxNumberOfSamples = 6  # samples for one batch must be < maxNumberOfSamples
-  
+  tmpEpochs = 1
+  epochs = userOpts.numberOfEpochs
+  if userOpts.overFit:
+    tmpEpochs = epochs
+    epochs = 1
+    
+  print('epochs: ', epochs)
   for epoch in range(epochs):  # loop over the dataset multiple times
     for i, data in enumerate(dataloader, 0):
         # get the inputs
@@ -277,14 +222,21 @@ def trainNet(net, device, dataloader, epochs):
         labelData = data['label']
         maskData = data['mask']
         
-        global indexArrayTest
-        indexArrayTest = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=device, requires_grad=False)
+        icc = lf.normCrossCorr(imgData, imgData[:,range(-1,imgData.shape[1]-1),])
+        print('inital cross corr: ', icc)
+        
+        maxNumberOfPixs = imgPatchSize * imgPatchSize * imgPatchSize * imgData.shape[1] + 1
+        
+#         global indexArrayTest
+#         indexArrayTest = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=device, requires_grad=False)
         
         numberofSamples = (torch.numel(imgData) / maxNumberOfPixs) + 1
-        numberOfiterations = (numberofSamples / maxNumberOfSamples) + 1
-        numberofSamplesPerRun = min(numberofSamples, maxNumberOfSamples - 1)
+        numberOfiterations = (numberofSamples / userOpts.maxNumberOfSamples) + 1
+        numberOfiterations *= tmpEpochs
+        numberofSamplesPerRun = min(numberofSamples, userOpts.maxNumberOfSamples - 1)
         
-        
+        print('numberOfiterationsPerEpoch: ', numberOfiterations)
+        print('numberofSamplesPerIteration: ', numberofSamplesPerRun)
         if torch.numel(imgData) >= maxNumberOfPixs:
           doRandomSubSampling = True
           patchSizes = getPatchSize(imgData.shape, imgPatchSize)
@@ -300,22 +252,27 @@ def trainNet(net, device, dataloader, epochs):
             imgDataToWork = randomSubSamples[0]
             labelDataToWork = randomSubSamples[1]
           
-          optimizeNet(net, imgDataToWork, labelDataToWork, device, optimizer, lossWeights)
+          optimizeNet(net, imgDataToWork, labelDataToWork, userOpts.device, optimizer, lossWeights)
+          
+#           if (imgIteration % 10) == 0:
+#             lossWeights['vecLengthW'] = lossWeights['vecLengthW'] / 2.0
+#             print(lossWeights)
   
-  itkIndexArray = sitk.GetImageFromArray(indexArrayTest)
-  dataloader.dataset.saveData(itkIndexArray, 'IdxTmp', 'indexArray' + str(i) + '.nrrd', i, False)          
+#   itkIndexArray = sitk.GetImageFromArray(indexArrayTest)
+#   dataloader.dataset.saveData(itkIndexArray, 'IdxTmp', 'indexArray' + str(i) + '.nrrd', i, False)          
   print('Finished Training') 
 
 
 def main(argv):
   
-  torch.backends.cudnn.enabled = False
-  CUDA_LAUNCH_BLOCKING = 1
-  callString = 'FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH --testMode --trainMode'
+  #torch.backends.cudnn.enabled = False
+  #CUDA_LAUNCH_BLOCKING = 1
+  callString = 'FirstNet.py --trainingFiles=files.csv --valdiationFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH --testMode --trainMode --validationMode --overfit'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'valdiationFiles=', 'device=', 'numberOfEpochs=', 'outputPath=', 'testMode', 'trainMode'])
-  except getopt.GetoptError:
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'valdiationFiles=', 'device=', 'numberOfEpochs=', 'outputPath=', 'testMode', 'trainMode', 'validationMode', 'overfit'])
+  except getopt.GetoptError, e:
+    print(e)
     print(callString)
     return
     
@@ -323,34 +280,30 @@ def main(argv):
     print(callString)
     return
 
-  device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-  numberOfEpochs = 500
-  testMode = False
-  trainMode = False
-  
   outputPath = 'RegResults'  
   for opt, arg in opts:
     if opt == '--trainingFiles':
-      trainingFileNamesCSV = arg
-    elif opt == '--valdiationFiles':
-      validationFileNamesCSV = arg
+      userOpts.trainingFileNamesCSV = arg
     elif opt == '--device':
-      device = arg      
+      userOpts.device = arg      
     elif opt == '--outputPath':
-      outputPath = arg      
+      userOpts.outputPath = arg      
     elif opt == '--numberOfEpochs':
-      numberOfEpochs = int(arg)
+      userOpts.numberOfEpochs = int(arg)
     elif opt == '--testMode':
-      testMode = True
+      userOpts.testMode = True
     elif opt == '--trainMode':
-      trainMode = True          
+      userOpts.trainMode = True
+    elif opt == '--overfit':
+      userOpts.overFit = True
+                
       
   torch.manual_seed(0)
   np.random.seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
-  headAndNeckTrainSet = HeadAndNeckDataset(trainingFileNamesCSV, ToTensor())
+  headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor())
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
@@ -360,28 +313,28 @@ def main(argv):
   if not os.path.isdir(outputPath):
     os.makedirs(outputPath)
   modelFileName = outputPath + os.path.sep + 'UNetfinalParams.pt'
-  if trainMode:
+  if userOpts.trainMode:
     start = time.time()
     if False:  # device == "cpu":
       net.share_memory()
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        p = mp.Process(target=trainNet, args=(net, device, dataloader, numberOfEpochs))
+        p = mp.Process(target=trainNet, args=(net, dataloader, userOpts))
         p.start()
         processes.append(p)
       for p in processes:
         p.join()
           
     else:
-      trainNet(net, device, dataloader, numberOfEpochs)
+      trainNet(net, dataloader, userOpts)
     end = time.time()
     print(end - start)
     torch.save(net.state_dict(), modelFileName)
     
-  if testMode:
+  if userOpts.testMode:
     net.load_state_dict(torch.load(modelFileName))
-    testNet(net, device, dataloader, outputPath)
+    testNet(net, dataloader, userOpts)
 
 if __name__ == "__main__":
   main(sys.argv[1:])  

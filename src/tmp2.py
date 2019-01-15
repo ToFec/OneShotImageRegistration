@@ -1,11 +1,20 @@
 import torch
 from torch.autograd import Variable
+import os
 
 grads = {}
 def save_grad(name):
     def hook(grad):
         grads[name] = grad
     return hook
+
+
+trainingFileName = '/home/fechter/workspace/TorchSandbox/resources/Popi01/00.pts'
+if (os.path.isfile(trainingFileName)):
+  pointFile = open(trainingFileName,'r') 
+  for line in pointFile:
+    pointsStr = line.split( )
+    point = (float(pointsStr[0]), float(pointsStr[1]), float(pointsStr[2]))
 
 x = Variable(torch.randn(1,1), requires_grad=True)
 y = 3*x

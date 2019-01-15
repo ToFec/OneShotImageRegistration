@@ -90,5 +90,14 @@ def normCrossCorr(img0, img1):
       dotProd = torch.dot(x,y) + 1
       result = result + dotProd
   return 1 - (result / (2 * img0.shape[0] * img0.shape[1]))
+
+def vecLength(defField):
+  tmp0 = defField[:,range(0,defField.shape[1],3),] * defField[:,range(0,defField.shape[1],3),]
+  tmp1 = defField[:,range(1,defField.shape[1],3),] * defField[:,range(1,defField.shape[1],3),]
+  tmp2 = defField[:,range(2,defField.shape[1],3),] * defField[:,range(2,defField.shape[1],3),]
+  tmpSum = tmp0 + tmp1 + tmp2
+  del tmp0, tmp1, tmp2
+  tmpSqrt = torch.sqrt(tmpSum)
+  return tmpSqrt.mean()
   
   
