@@ -82,12 +82,17 @@ def getPatchSize(imgShape, imgPatchSize):
     
   return (patchSize0, patchSize1, patchSize2)
 
-def deformImage(imgToDef, defFields, device):
+def deformImage(imgToDef, defFields, device, detach=True):
   zeroDefField = getZeroDefField(imgToDef.shape)
   zeroDefField = zeroDefField.to(device)  
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
-  currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach()
-  currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach()
-  currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach()
+  if (detach):
+    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach()
+    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach()
+    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach()
+  else:
+    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ]
+    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ]
+    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ]
   deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
   return deformedTmp

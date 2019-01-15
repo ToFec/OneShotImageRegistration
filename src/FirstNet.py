@@ -173,7 +173,7 @@ def optimizeNet(net, imgDataToWork, labelToWork, device, optimizer, lossWeights)
   for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
     imgToDef = imgDataToWork[:, None, chanIdx, ]
     chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-    deformedTmp = deformImage(imgToDef, defFields[: , chanRange, ], device)
+    deformedTmp = deformImage(imgToDef, defFields[: , chanRange, ], device, False)
     imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
     
     cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
@@ -190,11 +190,11 @@ def optimizeNet(net, imgDataToWork, labelToWork, device, optimizer, lossWeights)
   else:
     smoothnessDF = lf.smoothnessVecField(defFields, device)
   
-  vecLengthLoss = lf.vecLength(defFields)
+#   vecLengthLoss = lf.vecLength(defFields)
+  vecLengthLoss = torch.abs(defFields).mean()
   cycleLoss = lf.cycleLoss(cycleImgData, device)
   loss = lossWeights['ccW'] * crossCorr + lossWeights['smoothW'] * smoothnessDF + lossWeights['vecLengthW'] * vecLengthLoss + lossWeights['cycleW'] * cycleLoss
   print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
-  print('loss: %.3f' % (loss))
   print('loss: %.3f' % (loss))
     
   loss.backward()
