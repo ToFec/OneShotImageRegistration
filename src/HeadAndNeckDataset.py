@@ -173,20 +173,6 @@ class HeadAndNeckDataset(Dataset):
         os.makedirs(path)
       sitk.WriteImage(data, path + os.path.sep + filename)
 
-class PointReader():
-  def loadData(self, filename):
-    subtract = (0,0,0)
-    currPoints = []
-    pointFile = open(filename,'r') 
-    for line in pointFile:
-      pointsStr = line.split( )
-      if float(pointsStr[0] == 'subtract'):
-          subtract = (float(pointsStr[1]), float(pointsStr[2]), float(pointsStr[3]))
-      else:
-        point = (float(pointsStr[0]) - subtract[0], float(pointsStr[1]) - subtract[0], float(pointsStr[2]) - subtract[0])
-        currPoints.append(point)
-    return currPoints
-    
 class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 

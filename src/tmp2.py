@@ -1,6 +1,7 @@
 import torch
 from torch.autograd import Variable
 import os
+from eval import LandmarkHandler
 
 grads = {}
 def save_grad(name):
@@ -8,6 +9,11 @@ def save_grad(name):
         grads[name] = grad
     return hook
 
+defField = '/home/fechter/workspace/TorchSandbox/popiTmpResults/deformationFieldDataset0image0channel0.nrrd'
+landmarks = '/home/fechter/workspace/TorchSandbox/popiTmpResults/00.fcsv'
+
+pp = LandmarkHandler.PointProcessor()
+pp.deformPoints(landmarks, defField)
 
 trainingFileName = '/home/fechter/workspace/TorchSandbox/resources/Popi01/00.pts'
 if (os.path.isfile(trainingFileName)):
