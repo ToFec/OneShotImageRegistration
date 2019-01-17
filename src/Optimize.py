@@ -8,6 +8,8 @@ import SimpleITK as sitk
 import LossFunctions as lf
 from torch.utils.data import dataloader
 
+import os
+
 
 class Optimize():
 
@@ -239,10 +241,13 @@ class Optimize():
         epochValidation =  self.terminateLoopByItCount
       datasetIterationValidation = self.terminateLoopByItCount
       
-      
+    logfile = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'    
+    logFile = open(logfile,'w', buffering=0)  
+    lossCounter = 0
+    runningLoss = 0.0    
     print('epochs: ', epochs)
     epochCount = 0
-    while True:
+    while True: ##epoch loop
       for i, data in enumerate(dataloader, 0):
           # get the inputs
           imgData = data['image']
@@ -278,6 +283,13 @@ class Optimize():
               labelDataToWork = randomSubSamples[1]
             loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
             
+            runningLoss += loss.item()
+            if lossCounter % 10 == 0:
+              runningLoss /= 10
+              logFile.write(str(runningLoss) + ';')
+              runningLoss = 0.0
+            lossCounter+=1
+            
             imgIteration+=1
             if (datasetIterationValidation(loss, imgIteration, numberOfiterations)):
               break
@@ -286,6 +298,7 @@ class Optimize():
       if (epochValidation(loss, epochCount, epochs)):
         break
       
+    logFile.close()  
     return loss    
 
 

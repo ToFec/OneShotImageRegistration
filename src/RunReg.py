@@ -10,7 +10,7 @@ from Optimize import Optimize
 
 import time
 
-from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
 from Net import UNet
 import Options as userOpts
 
@@ -31,7 +31,6 @@ def main(argv):
     print(callString)
     return
 
-  outputPath = 'RegResults'  
   for opt, arg in opts:
     if opt == '--trainingFiles':
       userOpts.trainingFileNamesCSV = arg
@@ -54,7 +53,7 @@ def main(argv):
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
-  headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor())
+  headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True, SmoothImage())
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
@@ -62,9 +61,9 @@ def main(argv):
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
   trainTestOptimize = Optimize(net, userOpts)
   print(net)
-  if not os.path.isdir(outputPath):
-    os.makedirs(outputPath)
-  modelFileName = outputPath + os.path.sep + 'UNetfinalParams.pt'
+  if not os.path.isdir(userOpts.outputPath):
+    os.makedirs(userOpts.outputPath)
+  modelFileName = userOpts.outputPath + os.path.sep + 'UNetfinalParams.pt'
   if userOpts.trainMode:
     start = time.time()
     if False:  # device == "cpu":

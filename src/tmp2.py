@@ -9,10 +9,17 @@ def save_grad(name):
         grads[name] = grad
     return hook
 
-defField = '/home/fechter/workspace/TorchSandbox/popiTmpResults/deformationFieldDataset0image0channel0.nrrd'
-landmarks = '/home/fechter/workspace/TorchSandbox/popiTmpResults/00.fcsv'
+#referenceImg = '/home/fechter/workspace/TorchSandbox/resources/Popi01/img0.nrrd'
+defField = '/home/fechter/workspace/TorchSandbox/results/popiTmpResults200/deformationFieldDataset0image0channel0.nrrd'
+landmarks = '/home/fechter/workspace/TorchSandbox/results/popiTmpResults200/tmpPointSetSlicerDeformed.fcsv'
+# landmarksSlicer = '/home/fechter/workspace/TorchSandbox/results/popiTmpResults200/00Slicer.fcsv'
+
+# pr = LandmarkHandler.PointReader()
+# points = pr.loadData(landmarks)
+# pr.saveDataFcsvSlicer(landmarksSlicer, points)
 
 pp = LandmarkHandler.PointProcessor()
+# pp.deformPoints(landmarks, defField, referenceImg)
 pp.deformPoints(landmarks, defField)
 
 trainingFileName = '/home/fechter/workspace/TorchSandbox/resources/Popi01/00.pts'

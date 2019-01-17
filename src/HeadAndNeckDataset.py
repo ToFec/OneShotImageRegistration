@@ -4,13 +4,15 @@ from torch.utils.data import Dataset
 import SimpleITK as sitk
 import torch
 import numpy as np
+import Utils
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, csv_file, transform=None, loadOnInstantiation=True):
+    def __init__(self, csv_file, transform=None, loadOnInstantiation=True, smoothFilter=None):
 
         self.transform = transform
+        self.smooth = smoothFilter
         self.loadOnInstantiation = loadOnInstantiation
         csvtrainingFiles =  open(csv_file, 'rb')
         self.meansAndStds = {}
@@ -146,6 +148,8 @@ class HeadAndNeckDataset(Dataset):
       sample = {'image': imgData, 'label': labelData, 'mask': maskData}
       if self.transform:
         sample = self.transform(sample)
+      if self.smooth:
+        sample = self.smooth(sample)
       return sample  
     
     def __getitem__(self, idx):
@@ -196,5 +200,18 @@ class ToTensor(object):
           
         return {'image': torch.from_numpy(image),
                 'label': labelTorch,
-                'mask': maskTorch}      
+                'mask': maskTorch}
+
+class SmoothImage(object):
+
+    def __call__(self, sample):
+      image, label, mask = sample['image'], sample['label'], sample['mask']
+
+      for i in range(0,image.shape[0]):
+        imgToSmooth = image[i,]
+        image[i,] = Utils.smoothArray3D(imgToSmooth, image.device, 1, 0.5, 3)
+          
+      return {'image': image,
+                'label': label,
+                'mask': mask}               
         

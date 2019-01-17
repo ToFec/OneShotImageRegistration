@@ -31,23 +31,38 @@ class PointReader():
     for point in points:
       pointFile.write('Landmark' + str(i) + ',' + str(point[0]) + ',' + str(point[1]) + ',' + str(point[2]) + '\n')
       i+=1
-    pointFile.close()    
+    pointFile.close()
+  
+  def saveDataFcsvSlicer(self, filename, points):
+    pointFile = open(filename,'w')
+    i = 0 
+    for point in points:
+      pointFile.write('Landmark' + str(i) + ',' + str(point[0] * -1) + ',' + str(point[1] * -1) + ',' + str(point[2]) + '\n')
+      i+=1
+    pointFile.close()     
 
 class PointProcessor():
 
-  def deformPoints(self, filePath, defFieldFileName):
+##expects a vector field that points from input to output
+## ATTENTION: the neural net outputs a vector field that points from output to input
+  def deformPoints(self, filePath, defFieldFileName, referenceImg = 0):
     
     defFieldITK = sitk.ReadImage(str(defFieldFileName))
     defField = sitk.GetArrayFromImage(defFieldITK)
-    defFieldSpacing = defFieldITK.GetSpacing()
-    defFieldOrigin = defFieldITK.GetOrigin()
+    if (referenceImg != 0):
+      refImgItk = sitk.ReadImage(str(referenceImg))
+      defFieldSpacing = refImgItk.GetSpacing()
+      defFieldOrigin = refImgItk.GetOrigin()
+    else:
+      defFieldSpacing = defFieldITK.GetSpacing()
+      defFieldOrigin = defFieldITK.GetOrigin()
+      
     defField = np.moveaxis(defField, 0, 2)
     defField = np.moveaxis(defField, 0, 1)
     
     pr = PointReader()
     points = pr.loadData(filePath)
     newPoints = []
-    tmp = (1.0, 1.0, -1.0)
     for point in points:
 
       idx0 = []
@@ -60,8 +75,8 @@ class PointProcessor():
         idx0.append( firstIdx )
         idx1.append( firstIdx + 1 )
         firsPart = ijk - firstIdx
-        part0.append( firsPart )
-        part1.append( 1 - firsPart )
+        part1.append( firsPart )
+        part0.append( 1 - firsPart )
       
       defVec = (0,0,0)
       if (idx0[0] > 0 and idx0[1] > 0 and idx0[2] > 0 and idx1[0] < defField.shape[0] and idx1[1] < defField.shape[1] and idx1[2] < defField.shape[2]):

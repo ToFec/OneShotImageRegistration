@@ -39,13 +39,14 @@ def getZeroDefField(imagShape):
   defField = torch.from_numpy(defField)
   return defField
 
-def smoothArray3D(inputArray, device):
-    smoothing = GaussianSmoothing(1, 5, 2, 3, device)
-    input = torch.nn.functional.pad(inputArray, (2,2,2,2,2,2))
-    input = input[None, None, ]
-    input = smoothing(input)
-    input = torch.nn.functional.pad(input, (2,2,2,2,2,2))
-    return smoothing(input)[0,0]
+def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
+    smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)
+    padVal = int(kernelSize / 2)
+    input = inputArray[None, None, ]
+    for i in range(0,nrOfFilters):
+      input = torch.nn.functional.pad(input, (padVal,padVal,padVal,padVal,padVal,padVal))
+      input = smoothing(input)
+    return input[0,0]
   
 def getMaxIdxs(imgShape, imgPatchSize):
   if imgShape[2] - imgPatchSize > 0:
