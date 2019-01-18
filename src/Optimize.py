@@ -7,6 +7,7 @@ import SimpleITK as sitk
 
 import LossFunctions as lf
 from torch.utils.data import dataloader
+from eval.LandmarkHandler import PointProcessor, PointReader
 
 import os
 
@@ -16,6 +17,11 @@ class Optimize():
   def __init__(self, net, userOpts):
     self.net = net
     self.userOpts = userOpts
+    weightSum = self.userOpts.ccW + self.userOpts.smoothW + self.userOpts.vecLengthW + self.userOpts.cycleW 
+    self.userOpts.ccW = self.userOpts.ccW  / weightSum
+    self.userOpts.smoothW = self.userOpts.smoothW  / weightSum
+    self.userOpts.vecLengthW = self.userOpts.vecLengthW  / weightSum
+    self.userOpts.cycleW = self.userOpts.cycleW  / weightSum
     
     self.net.to(self.userOpts.device)
 
@@ -29,12 +35,15 @@ class Optimize():
     self.net.eval()
     
     patchSize = self.userOpts.patchSize
-    
+    pp = PointProcessor()
+    pr = PointReader()
     with torch.no_grad():
       for i, data in enumerate(dataloader, 0):
         imgData = data['image']
         labelData = data['label']
         maskData = data['mask']
+        landmarkData = data['landmarks']
+        
         
         imgShape = imgData.shape
         imgData = imgData.to(self.userOpts.device)
@@ -98,8 +107,19 @@ class Optimize():
             defX = defFields[imgIdx, chanIdx * 3, ].detach() * (imgToDef.shape[2] / 2)
             defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * (imgToDef.shape[3] / 2)
             defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * (imgToDef.shape[4] / 2)
-            defDataToSave = sitk.GetImageFromArray(getDefField(defX, defY, defZ), isVector=True)
+            defField = getDefField(defX, defY, defZ)
+            defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
             dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
+            
+            
+            if (len(landmarkData) > 0):
+              defField = np.moveaxis(defField, 0, 2)
+              defField = np.moveaxis(defField, 0, 1)
+              defField = torch.from_numpy(defField)
+              currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
+              deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[i], dataloader.dataset.spacings[i])
+              pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
+            
   
 
   def getIndicesForRandomization(self, maskData, imgData, imgPatchSize):
@@ -203,15 +223,23 @@ class Optimize():
     optimizer.step()
     return loss
   
-  def terminateLoopByLoss(self, loss, currIteration, itThreshold):
-    if (loss <= self.userOpts.lossThreshold):
+  def terminateLoopByLoss(self, loss, runningLoss, currIteration, itThreshold):
+    if (loss == runningLoss.mean()):
       self.finalLoss = loss
       self.finalNumberIterations = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByItCount(self, loss, currIteration, itThreshold):
+  def terminateLoopByLossAndItCount(self, loss, runningLoss, currIteration, itThreshold):
+    if (np.isclose(loss, runningLoss.mean(),atol=self.userOpts.lossTollerance)[0] or currIteration == itThreshold):
+      self.finalLoss = loss
+      self.finalNumberIterations = currIteration
+      return True
+    else:
+      return False
+    
+  def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold):
     if (currIteration == itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations = currIteration
@@ -231,12 +259,12 @@ class Optimize():
       epochs = 1
       epochValidation = self.terminateLoopByItCount
       if self.userOpts.trainTillConvergence:
-        datasetIterationValidation = self.terminateLoopByLoss
+        datasetIterationValidation = self.terminateLoopByLossAndItCount
       else:
         datasetIterationValidation = self.terminateLoopByItCount
     else:
       if self.userOpts.trainTillConvergence:
-        epochValidation =  self.terminateLoopByLoss
+        epochValidation =  self.terminateLoopByLossAndItCount
       else:
         epochValidation =  self.terminateLoopByItCount
       datasetIterationValidation = self.terminateLoopByItCount
@@ -244,7 +272,7 @@ class Optimize():
     logfile = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'    
     logFile = open(logfile,'w', buffering=0)  
     lossCounter = 0
-    runningLoss = 0.0    
+    runningLoss = np.ones(10)  
     print('epochs: ', epochs)
     epochCount = 0
     while True: ##epoch loop
@@ -283,19 +311,22 @@ class Optimize():
               labelDataToWork = randomSubSamples[1]
             loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
             
-            runningLoss += loss.item()
-            if lossCounter % 10 == 0:
-              runningLoss /= 10
-              logFile.write(str(runningLoss) + ';')
-              runningLoss = 0.0
-            lossCounter+=1
+            numpyLoss = loss.detach().cpu().numpy()
+            runningLoss[lossCounter] = numpyLoss
+            if lossCounter == 9:
+              meanLoss = runningLoss.mean()
+              logFile.write(str(meanLoss) + ';')
+              lossCounter = 0
+            else:
+              lossCounter+=1
+            
             
             imgIteration+=1
-            if (datasetIterationValidation(loss, imgIteration, numberOfiterations)):
+            if (datasetIterationValidation(numpyLoss, runningLoss, imgIteration, numberOfiterations)):
               break
             
       epochCount+=1
-      if (epochValidation(loss, epochCount, epochs)):
+      if (epochValidation(numpyLoss, runningLoss, epochCount, epochs)):
         break
       
     logFile.close()  

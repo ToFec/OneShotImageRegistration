@@ -15,5 +15,5 @@ outputPath='.'
 patchSize=64
 maxNumberOfSamples=6 # samples for one batch must be < maxNumberOfSamples
 netDepth=3
-trainTillConvergence = False
-lossThreshold = 0.03
+trainTillConvergence = True
+lossTollerance=0.00000001

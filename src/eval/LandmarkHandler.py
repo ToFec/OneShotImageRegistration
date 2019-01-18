@@ -10,19 +10,19 @@ class PointReader():
     if file_extension == '.fcsv':
       for line in pointFile:
         pointsStr = line.split(',')
-        point = (float(pointsStr[1]), float(pointsStr[2]), float(pointsStr[3]))
+        point = (np.float32(pointsStr[1]), np.float32(pointsStr[2]), np.float32(pointsStr[3]))
         currPoints.append(point)      
     elif file_extension == '.pts':
       for line in pointFile:
         pointsStr = line.split( )
-        point = (float(pointsStr[0]), float(pointsStr[1]), float(pointsStr[2]))
+        point = (np.float32(pointsStr[0]), np.float32(pointsStr[1]), np.float32(pointsStr[2]))
         currPoints.append(point)
     return currPoints
   
   def saveData(self, filename, points):
     pointFile = open(filename,'w') 
     for point in points:
-      pointFile.write(str(point[0]) + ' ' + str(point[1]) + ' ' + str(point[2]) + '\n')
+      pointFile.write(str(np.float32(point[0])[0]) + ' ' + str(np.float32(point[1])[0]) + ' ' + str(np.float32(point[2])[0]) + '\n') ##little hack to print torch tensors and numpy values
     pointFile.close()
 
   def saveDataFcsv(self, filename, points):
@@ -62,6 +62,13 @@ class PointProcessor():
     
     pr = PointReader()
     points = pr.loadData(filePath)
+    
+    newPoints = self.deformPointsWithField(points, defField, defFieldOrigin, defFieldSpacing)
+    filename, file_extension = os.path.splitext(filePath)  
+    pr.saveDataFcsv(filename + 'deformed.fcsv', newPoints)
+  
+  def deformPointsWithField(self, points, defField, defFieldOrigin, defFieldSpacing):
+    
     newPoints = []
     for point in points:
 
@@ -87,10 +94,10 @@ class PointProcessor():
       
       pointPosNew = (point[0] + defVec[0], point[1] + defVec[1], point[2] + defVec[2])
       newPoints.append(pointPosNew)
-        
-    filename, file_extension = os.path.splitext(filePath)  
-    pr.saveDataFcsv(filename + 'deformed.fcsv', newPoints)
-  
+    
+    return newPoints    
+    
+      
   def convertToFcsv(self, filepath):
     i = 0
     pr = PointReader()

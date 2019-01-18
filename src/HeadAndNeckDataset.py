@@ -5,6 +5,7 @@ import SimpleITK as sitk
 import torch
 import numpy as np
 import Utils
+from eval.LandmarkHandler import PointReader
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -22,15 +23,17 @@ class HeadAndNeckDataset(Dataset):
           trianingCSVFileReader = csv.reader(csvtrainingFiles, delimiter=';', encoding='iso8859_15')
           if (self.loadOnInstantiation):
             self.loadedIgSamples = {}
-          else:
-            self.dataFileList = []
-            self.labelFileList = []
-            self.maskFileList = []
+          
+          self.dataFileList = []
+          self.labelFileList = []
+          self.maskFileList = []
+          self.landMarkFileList = []
           
           idx = 0
           for trainingFilePath in trianingCSVFileReader:
             imgFiles = []
             maskFiles = []
+            landMarkFiles = []
             labelFiles = []
             i = 0
             while (True):
@@ -51,6 +54,10 @@ class HeadAndNeckDataset(Dataset):
               if (os.path.isfile(maskFileName)):
                 maskFiles.append(maskFileName)
               
+              landmarkFileName = trainingFilePath[0] + os.path.sep + str(i) + '0.pts'
+              if (os.path.isfile(landmarkFileName)):
+                landMarkFiles.append(landmarkFileName)
+              
               labelsFileName = trainingFilePath[0] + os.path.sep + 'struct' + str(i) + '.nii.gz'  
               if (os.path.isfile(labelsFileName)):
                 labelFiles.append(labelsFileName)
@@ -59,20 +66,19 @@ class HeadAndNeckDataset(Dataset):
                 labelFiles.append(labelsFileName)
               i=i+1
             
+            self.dataFileList.append(imgFiles)
+            self.labelFileList.append(labelFiles)
+            self.maskFileList.append(maskFiles)
+            self.landMarkFileList.append(landMarkFiles)
+            
             self.channels = len(imgFiles)
             if (self.loadOnInstantiation):
-              sample = self.loadData(imgFiles, maskFiles, labelFiles, idx)
+              sample = self.loadData(idx)
               self.loadedIgSamples[idx] = sample
               idx = idx + 1
-            else:
-              self.dataFileList.append(imgFiles)
-              self.labelFileList.append(labelFiles)
-              self.maskFileList.append(maskFiles)
+
           
-          if (self.loadOnInstantiation):
-            self.length = len(self.loadedIgSamples)
-          else:
-            self.length = len(self.dataFileList)
+          self.length = len(self.dataFileList)
         finally:
           csvtrainingFiles.close()
 
@@ -82,10 +88,15 @@ class HeadAndNeckDataset(Dataset):
     def getChannels(self):
       return self.channels;
     
-    def loadData(self, trainingFileNames, maskFileNames, labelsFileNames, idx):
+    def loadData(self, idx):
       imgData = []
       spacing = []
       origin = []
+      trainingFileNames = self.dataFileList[idx]
+      maskFileNames = self.maskFileList[idx]
+      labelsFileNames = self.labelFileList[idx]
+      landMarkFileNames = self.landMarkFileList[idx]
+      
       for trainingFileName in trainingFileNames:
         #https://na-mic.org/w/images/a/a7/SimpleITK_with_Slicer_HansJohnson.pdf
         tmp = sitk.ReadImage(str(trainingFileName))
@@ -144,8 +155,15 @@ class HeadAndNeckDataset(Dataset):
           labelData.append(labelsNii)
         labelData = np.stack(labelData)
         labelData = labelData[:,:(labelData.shape[1]/2)*2,:(labelData.shape[2]/2)*2,:(labelData.shape[3]/2)*2]
-
-      sample = {'image': imgData, 'label': labelData, 'mask': maskData}
+      
+      landmarkData = []
+      if (len(trainingFileNames) == len(landMarkFileNames)):
+        pr = PointReader()
+        for lmFileName in landMarkFileNames:
+          points = pr.loadData(lmFileName)
+          landmarkData.append(points)
+      
+      sample = {'image': imgData, 'label': labelData, 'mask': maskData, 'landmarks': landmarkData}
       if self.transform:
         sample = self.transform(sample)
       if self.smooth:
@@ -158,10 +176,7 @@ class HeadAndNeckDataset(Dataset):
         if self.loadOnInstantiation:
           sample = self.loadedIgSamples[idx]
         else:
-          trainingFileNames = self.dataFileList[idx]
-          maskFileNames = self.maskFileList[idx]
-          labelsFileNames = self.labelFileList[idx]
-          sample = self.loadData(trainingFileNames, maskFileNames, labelsFileNames, idx)
+          sample = self.loadData(idx)
 
         return sample
 
@@ -181,14 +196,8 @@ class ToTensor(object):
     """Convert ndarrays in sample to Tensors."""
 
     def __call__(self, sample):
-        image, label, mask = sample['image'], sample['label'], sample['mask']
+        image, label, mask, landmarkData = sample['image'], sample['label'], sample['mask'], sample['landmarks']
 
-        # swap color axis because
-        # numpy image: H x W x C
-        # torch image: C X H X W
-#         image = image.transpose((2, 0, 1))
-#         label = label.transpose((2, 0, 1))
-#         mask = mask.transpose((2, 0, 1))
         labelTorch = torch.tensor([1])
         if(len(label) > 0):
           labelTorch = torch.from_numpy(label)
@@ -200,18 +209,20 @@ class ToTensor(object):
           
         return {'image': torch.from_numpy(image),
                 'label': labelTorch,
-                'mask': maskTorch}
+                'mask': maskTorch,
+                'landmarks': landmarkData}
 
 class SmoothImage(object):
 
     def __call__(self, sample):
-      image, label, mask = sample['image'], sample['label'], sample['mask']
+      image, label, mask, landmarkData = sample['image'], sample['label'], sample['mask'], sample['landmarks']
 
       for i in range(0,image.shape[0]):
         imgToSmooth = image[i,]
         image[i,] = Utils.smoothArray3D(imgToSmooth, image.device, 1, 0.5, 3)
-          
+
       return {'image': image,
                 'label': label,
-                'mask': mask}               
+                'mask': mask,
+                'landmarks': landmarkData}               
         
