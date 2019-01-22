@@ -58,7 +58,7 @@ def main(argv):
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
+  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, useDeepSelfSupervision=True)
   trainTestOptimize = Optimize(net, userOpts)
   print(net)
   if not os.path.isdir(userOpts.outputPath):

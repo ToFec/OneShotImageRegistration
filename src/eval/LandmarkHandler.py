@@ -1,6 +1,7 @@
 import sys, getopt, os
 import SimpleITK as sitk
 import numpy as np
+from math import sqrt
 
 class PointReader():
   def loadData(self, filename):
@@ -42,6 +43,49 @@ class PointReader():
     pointFile.close()     
 
 class PointProcessor():
+
+  def calculatePointDistance(self, filepath0, filepath1):
+    i = 0
+    origFiles = []
+    deformedFiles = []
+    while (True):
+      landmarkFileName = filepath0 + os.path.sep + str(i) + '0.pts'
+      if (os.path.isfile(landmarkFileName)):
+        origFiles.append(landmarkFileName)
+      else:
+        break
+      
+      landmarkFileName = filepath1 + os.path.sep + str(i) + '0deformed.pts'
+      if (os.path.isfile(landmarkFileName)):
+        deformedFiles.append(landmarkFileName)
+
+      i = i + 1
+
+    if (len(origFiles) != len(deformedFiles)):
+      deformedFiles = origFiles
+      
+    pr = PointReader()
+    distances = [] 
+    for pIdx in range(-1, i - 1):
+      origPoints = pr.loadData(origFiles[pIdx])
+      deformedPoints = pr.loadData(deformedFiles[pIdx+1])
+      distances.append( self.calculatePointSetDistance(origPoints, deformedPoints) )
+      
+    return distances
+
+  def calculatePointSetDistance(self, points0, points1):
+    meanDistance = 0.0
+    for idx in range(0,len(points0)):
+      point0 = points0[idx]
+      point1 = points1[idx]
+      distance = 0.0
+      for dim in range(0,len(point0)):
+        diff = point0[dim] - point1[dim]
+        diff *= diff
+        distance += diff
+      meanDistance += sqrt(distance)
+    meanDistance /= len(points0)
+    return meanDistance
 
 ##expects a vector field that points from input to output
 ## ATTENTION: the neural net outputs a vector field that points from output to input
@@ -145,26 +189,45 @@ class PointProcessor():
   
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv, '', ['path=', 'refImg=', 'correctPos'])
+    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=' ])
   except getopt.GetoptError, e:
     print(e)
     return
   
-  filepath = ''
+  filepath0 = ''
+  filepath1 = ''
+  outputPath = '.'
+  calcDiff = False
   correctPos = False  
   for opt, arg in opts:
-    if opt == '--path':
-      filepath = arg
+    if opt == '--path0':
+      filepath0 = arg
     elif opt == '--correctPos':
       correctPos = True
+    elif opt == '--calcDiff':
+      calcDiff = True      
+    elif opt == '--path1':
+      filepath1 = arg
+    elif opt == '--outputPath':
+      outputPath = arg
     elif opt == '--refImg':
       referenceImg = arg    
         
   pointProcessor = PointProcessor()   
   if (correctPos):
-    pointProcessor.correctPointPositions(filepath, referenceImg)
+    pointProcessor.correctPointPositions(filepath0, referenceImg)
+  elif(calcDiff):
+    distances = pointProcessor.calculatePointDistance(filepath0, filepath1)
+    logfile = outputPath + os.path.sep + 'distances.csv'    
+    logFile = open(logfile,'w', buffering=0)
+    for dist in distances:
+      logFile.write(str(dist) + ';')
+      
+    logFile.close()
+      
+      
   else:
-    pointProcessor.convertToFcsv(filepath)
+    pointProcessor.convertToFcsv(filepath0)
   
   
 if __name__ == "__main__":

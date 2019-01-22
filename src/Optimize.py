@@ -24,6 +24,7 @@ class Optimize():
     self.userOpts.cycleW = self.userOpts.cycleW  / weightSum
     
     self.net.to(self.userOpts.device)
+    self.finalNumberIterations = [0,0]
 
   def loadNet(self, filepath):
     self.net.load_state_dict(torch.load(filepath))
@@ -223,26 +224,26 @@ class Optimize():
     optimizer.step()
     return loss
   
-  def terminateLoopByLoss(self, loss, runningLoss, currIteration, itThreshold):
+  def terminateLoopByLoss(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
     if (loss == runningLoss.mean()):
       self.finalLoss = loss
-      self.finalNumberIterations = currIteration
+      self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByLossAndItCount(self, loss, runningLoss, currIteration, itThreshold):
-    if (np.isclose(loss, runningLoss.mean(),atol=self.userOpts.lossTollerance)[0] or currIteration == itThreshold):
+  def terminateLoopByLossAndItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
+    if (np.isclose(loss, runningLoss.mean(),atol=self.userOpts.lossTollerance) or currIteration == itThreshold):
       self.finalLoss = loss
-      self.finalNumberIterations = currIteration
+      self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold):
+  def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
     if (currIteration == itThreshold):
       self.finalLoss = loss
-      self.finalNumberIterations = currIteration
+      self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
@@ -322,11 +323,11 @@ class Optimize():
             
             
             imgIteration+=1
-            if (datasetIterationValidation(numpyLoss, runningLoss, imgIteration, numberOfiterations)):
+            if (datasetIterationValidation(numpyLoss, runningLoss, imgIteration, numberOfiterations, 0)):
               break
             
       epochCount+=1
-      if (epochValidation(numpyLoss, runningLoss, epochCount, epochs)):
+      if (epochValidation(numpyLoss, runningLoss, epochCount, epochs, 1)):
         break
       
     logFile.close()  

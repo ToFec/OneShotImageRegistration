@@ -1,7 +1,7 @@
 import torch
 
 
-numberOfEpochs = 500
+numberOfEpochs = 100
 testMode = True
 trainMode = True
 oneShot = True

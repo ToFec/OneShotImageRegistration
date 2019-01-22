@@ -16,7 +16,6 @@ from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
 from Net import UNet
 import Options as userOpts
 from eval.LandmarkHandler import PointProcessor
-from Options import ccW
 
 def main(argv):
   
@@ -41,8 +40,6 @@ def main(argv):
     elif opt == '--outputPath':
       userOpts.outputPath = arg      
       
-  torch.manual_seed(0)
-  np.random.seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
@@ -54,27 +51,30 @@ def main(argv):
   if not os.path.isdir(userOpts.outputPath):
     os.makedirs(userOpts.outputPath)
   
-  cCW = 0.6
-  ccWStep = 0.05
+  cCW = 0.7
+  ccWStep = 0.1
   smoothW = 0.0
-  smoothWStep = 0.01
+  smoothWStep = 0.05
   cycleW = 0.0
-  cycleWStep = 0.01
+  cycleWStep = 0.05
   vecLengthW = 0.0
-  vecLengthWSetp = 0.01
+  vecLengthWSetp = 0.05
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
   
   rootDir = userOpts.outputPath
-  
   while cCW <= 1.0:
-    while smoothW <= 0.2:
-      while cycleW <= 0.2:
-        while vecLengthW <= 0.2:
-          currDir = rootDir + os.path.sep + 'ccW' + str(ccW) + 'smoothW' + str(smoothW) + 'cycleW' + str(cycleW) + 'vecLengthW' + str(vecLengthW)
+    while smoothW <= 0.1:
+      while cycleW <= 0.1:
+        while vecLengthW <= 0.1:
+          currDir = rootDir + os.path.sep + 'ccW' + str(cCW) + 'smoothW' + str(smoothW) + 'cycleW' + str(cycleW) + 'vecLengthW' + str(vecLengthW)
           if not os.path.isdir(currDir):
             os.makedirs(currDir)
           userOpts.outputPath = currDir
+          
+          
+          torch.manual_seed(0)
+          np.random.seed(0)
           
           userOpts.smoothW = smoothW
           userOpts.cycleW = cycleW
