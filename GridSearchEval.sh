@@ -21,7 +21,8 @@ do
 	smothW=$(echo ${directory} | grep -o -P '(?<=smoothW)[0-9.]+')
 	cycleW=$(echo ${directory} | grep -o -P '(?<=cycleW)[0-9.]+')
 	vecLenghtW=$(echo ${directory} | grep -o -P '(?<=vecLengthW)[0-9.]+')
-	iterLossTime=$(cat lossIterLog.csv | grep -o -x -E '[0-9;.]+')
+	iterLossTime=$(cat lossIterLog.csv | grep -o -x -P '[0-9.;,\[\] ]+' | sed 's/[] \[]//g' | sed 's/,1//')
+#	iterLossTime=$(cat lossIterLog.csv | grep -o -x -E '[0-9;.]+')
 	cd ..
 	python ${pythonScript} --path0=${origLMPath} --path1=${directory} --calcDiff
 	newDist=$(cat distances.csv)

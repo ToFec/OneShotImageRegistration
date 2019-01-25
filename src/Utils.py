@@ -97,3 +97,11 @@ def deformImage(imgToDef, defFields, device, detach=True):
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ]
   deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
   return deformedTmp
+
+def loadImage(filename):
+  tmp = sitk.ReadImage(str(filename))
+  img0 = sitk.GetArrayFromImage(tmp)
+  img0 = np.expand_dims(img0, axis=0)
+  img0 = np.expand_dims(img0, axis=0)
+  img0 = torch.from_numpy(img0)
+  return img0

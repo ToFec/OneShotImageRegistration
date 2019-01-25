@@ -60,8 +60,6 @@ def main(argv):
   vecLengthW = 0.0
   vecLengthWSetp = 0.05
   
-  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
-  
   rootDir = userOpts.outputPath
   while cCW <= 1.0:
     while smoothW <= 0.1:
@@ -72,7 +70,7 @@ def main(argv):
             os.makedirs(currDir)
           userOpts.outputPath = currDir
           
-          
+          net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth)
           torch.manual_seed(0)
           np.random.seed(0)
           
