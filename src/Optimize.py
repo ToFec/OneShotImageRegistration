@@ -149,6 +149,47 @@ class Optimize():
     torch.cuda.synchronize()
     print(torch.cuda.memory_allocated())
   
+  def getUniformlyDistributedSubsamples(self, patchSizes, imgData, labelData, maskData):
+    imgShape = imgData.shape
+    if (maskData.dim() != imgData.dim()):
+      maskData = torch.ones(imgShape, dtype=torch.int8)
+
+    maxIdxs = getMaxIdxs(imgShape, patchSize)
+    
+    imgPatches = []
+    for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]):
+      for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]):
+        for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]):
+          if (maskData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].sum() > 0):
+            subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
+            if (labelData.dim() == imgData.dim()):
+              subLabelData = labelData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
+            else:
+              subLabelData = torch.Tensor();
+              
+            imgPatches.append( (subImgData, subLabelData) )
+       
+    leftover0 = imgShape[2] % patchSizes[0]
+    startidx0 = patchSizes[0] / 2 if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else leftover0
+    leftover1 = imgShape[3] % patchSizes[1]
+    startidx1 = patchSizes[1] / 2 if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else leftover1
+    leftover2 = imgShape[4] % patchSizes[2]
+    startidx2 = patchSizes[2] / 2 if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else leftover2
+    
+    if (startidx2 + startidx1 + startidx0 > 0) :               
+      for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]):
+        for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]):
+          for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]):
+            if (maskData[:, :, patchIdx0, patchIdx1, patchIdx2].sum() > 0):
+              subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
+              if (labelData.dim() == imgData.dim()):
+                subLabelData = labelData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
+              else:
+                subLabelData = torch.Tensor();
+              imgPatches.append( (subImgData, subLabelData) )
+              
+    return imgPatches
+    
     
   def getRandomSubSamples(self, numberofSamplesPerRun, idxs, patchSizes, imgData, labelData):
    
