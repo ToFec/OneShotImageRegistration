@@ -89,9 +89,9 @@ class Optimize():
             
             dataloader.dataset.saveData(imgDataDef, self.userOpts.outputPath, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
             dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
-            defX = defFields[imgIdx, chanIdx * 3, ].detach() * (imgToDef.shape[2] / 2)
-            defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * (imgToDef.shape[3] / 2)
-            defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * (imgToDef.shape[4] / 2)
+            defX = defFields[imgIdx, chanIdx * 3, ].detach()
+            defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach()
+            defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach()
             defField = getDefField(defX, defY, defZ)
             defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
             dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
@@ -241,9 +241,9 @@ class Optimize():
       
       cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
                   
-      cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach()
-      cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach()
-      cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach()
+      cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
+      cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
+      cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
     
     del zeroDefField, cycleIdxData
           
@@ -258,7 +258,7 @@ class Optimize():
     cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.vecLengthW * vecLengthLoss + self.userOpts.cycleW * cycleLoss
     print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
-    print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
+#     print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
 #     print('loss: %.3f' % (loss))
       
     loss.backward()
@@ -365,9 +365,6 @@ class Optimize():
               meanLoss = runningLoss.mean()
               logFile.write(str(meanLoss) + ';')
               lossCounter = 0
-              
-              self.userOpts.vecLengthW = self.userOpts.vecLengthW - self.userOpts.vecLengthW * 0.1
-              self.normalizeWeights()
             else:
               lossCounter+=1
             
