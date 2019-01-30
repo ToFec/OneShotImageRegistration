@@ -10,6 +10,7 @@ from torch.utils.data import dataloader
 from eval.LandmarkHandler import PointProcessor, PointReader
 
 import os
+import Visualize
 
 
 class Optimize():
@@ -17,15 +18,19 @@ class Optimize():
   def __init__(self, net, userOpts):
     self.net = net
     self.userOpts = userOpts
+    self.normalizeWeights()
+    
+    self.net.to(self.userOpts.device)
+    self.finalNumberIterations = [0,0]
+
+  
+  def normalizeWeights(self):
     weightSum = self.userOpts.ccW + self.userOpts.smoothW + self.userOpts.vecLengthW + self.userOpts.cycleW 
     self.userOpts.ccW = self.userOpts.ccW  / weightSum
     self.userOpts.smoothW = self.userOpts.smoothW  / weightSum
     self.userOpts.vecLengthW = self.userOpts.vecLengthW  / weightSum
     self.userOpts.cycleW = self.userOpts.cycleW  / weightSum
     
-    self.net.to(self.userOpts.device)
-    self.finalNumberIterations = [0,0]
-
   def loadNet(self, filepath):
     self.net.load_state_dict(torch.load(filepath))
     
@@ -45,43 +50,21 @@ class Optimize():
         maskData = data['mask']
         landmarkData = data['landmarks']
         
-        
         imgShape = imgData.shape
-        imgData = imgData.to(self.userOpts.device)
         
-        if (maskData.dim() != imgData.dim()):
-          maskData = torch.ones(imgShape, dtype=torch.int8)
-  
-        maxIdxs = getMaxIdxs(imgShape, patchSize)
+        idxs = self.getIndicesForUniformSampling(maskData, imgData, patchSize)
+        numberofSamplesPerRun = 1
         patchSizes = getPatchSize(imgShape, patchSize)
         
         defFields = torch.zeros((imgShape[0], imgShape[1] * 3, imgShape[2], imgShape[3], imgShape[4]), device=self.userOpts.device, requires_grad=False)
         indexArray = torch.zeros((imgShape[2], imgShape[3], imgShape[4]), device=self.userOpts.device, requires_grad=False)
-        for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]):
-          for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]):
-            for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]):
-              if (maskData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].sum() > 0):
-                subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-                indexArray[patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]] += 1
-                defFields[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[2], patchIdx2:patchIdx2 + patchSizes[2]] += self.net(subImgData)
-           
-        leftover0 = imgShape[2] % patchSizes[0]
-        startidx0 = patchSizes[0] / 2 if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else leftover0
-        leftover1 = imgShape[3] % patchSizes[1]
-        startidx1 = patchSizes[1] / 2 if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else leftover1
-        leftover2 = imgShape[4] % patchSizes[2]
-        startidx2 = patchSizes[2] / 2 if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else leftover2
+        for idx in idxs:
+          subSamples = self.getUniformlyDistributedSubsamples(numberofSamplesPerRun, (idx,), patchSizes, imgData, labelData, 0)
+          imgDataToWork = subSamples[0]
+          imgDataToWork = imgDataToWork.to(self.userOpts.device)
+          indexArray[idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += 1
+          defFields[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += self.net(imgDataToWork)
         
-        if (startidx2 + startidx1 + startidx0 > 0) :               
-          for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]):
-            for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]):
-              for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]):
-                if (maskData[:, :, patchIdx0, patchIdx1, patchIdx2].sum() > 0):
-                  subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-                  indexArray[patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]] += 1
-                  defFields[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]] += self.net(subImgData)    
-        
-        del maskData, subImgData
          
         indexArray[indexArray < 1] = 1
         
@@ -97,6 +80,7 @@ class Optimize():
         for imgIdx in range(imgShape[0]):
           for chanIdx in range(-1, imgShape[1] - 1):
             imgToDef = imgData[None, None, imgIdx, chanIdx, ]
+            imgToDef = imgToDef.to(self.userOpts.device)
             chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
             deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
             
@@ -121,8 +105,6 @@ class Optimize():
               deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[i], dataloader.dataset.spacings[i])
               pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
-  
-
   def getIndicesForRandomization(self, maskData, imgData, imgPatchSize):
     maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
     if (maskData.dim() == imgData.dim()):
@@ -135,39 +117,21 @@ class Optimize():
   
     return idxs
   
-
-  def save_grad(self, name):
-  
-      def hook(grad):
-          print(name)
-          print(torch.sum(grad))
-  
-      return hook
-  
-    
-  def printGPUMemoryAllocated(self):
-    torch.cuda.synchronize()
-    print(torch.cuda.memory_allocated())
-  
-  def getUniformlyDistributedSubsamples(self, patchSizes, imgData, labelData, maskData):
+  def getIndicesForUniformSampling(self, maskData, imgData, imgPatchSize):
     imgShape = imgData.shape
     if (maskData.dim() != imgData.dim()):
       maskData = torch.ones(imgShape, dtype=torch.int8)
 
-    maxIdxs = getMaxIdxs(imgShape, patchSize)
+    maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
+    patchSizes = getPatchSize(imgData.shape, imgPatchSize)
+    print(patchSizes)
     
-    imgPatches = []
+    idxs = []
     for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]):
       for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]):
         for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]):
           if (maskData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].sum() > 0):
-            subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-            if (labelData.dim() == imgData.dim()):
-              subLabelData = labelData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-            else:
-              subLabelData = torch.Tensor();
-              
-            imgPatches.append( (subImgData, subLabelData) )
+            idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
        
     leftover0 = imgShape[2] % patchSizes[0]
     startidx0 = patchSizes[0] / 2 if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else leftover0
@@ -181,17 +145,52 @@ class Optimize():
         for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]):
           for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]):
             if (maskData[:, :, patchIdx0, patchIdx1, patchIdx2].sum() > 0):
-              subImgData = imgData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-              if (labelData.dim() == imgData.dim()):
-                subLabelData = labelData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]]
-              else:
-                subLabelData = torch.Tensor();
-              imgPatches.append( (subImgData, subLabelData) )
+              idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
               
-    return imgPatches
+    return idxs
+      
+  def save_grad(self, name):
+  
+      def hook(grad):
+          print(name)
+          print(torch.sum(grad))
+  
+      return hook
+  
+    
+  def printGPUMemoryAllocated(self):
+    torch.cuda.synchronize()
+    print(torch.cuda.memory_allocated())
+  
+  def getUniformlyDistributedSubsamples(self,numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, currIteration):
+    
+    startIdx = currIteration % numberofSamplesPerRun
     
     
-  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, patchSizes, imgData, labelData):
+    imgDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
+    if (labelData.dim() == imgData.dim()):
+      labelDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
+    
+    iterationRange = np.arange(startIdx,startIdx+numberofSamplesPerRun)
+    iterationRange[iterationRange >= len(idxs)] = iterationRange[iterationRange >= len(idxs)] - len(idxs)
+    j = 0
+    for i in iterationRange:
+      idx = idxs[i]
+      imgDataNew[j, ] = imgData[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]]
+      if (labelData.dim() == imgData.dim()):
+        labelDataNew[j, ] = labelData[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]]
+      j=j+1
+      
+    imgDataToWork = imgDataNew
+    if (labelData.dim() == imgData.dim()):
+      labelDataToWork = labelDataNew
+    else:
+      labelDataToWork = torch.Tensor();
+      
+    return (imgDataToWork, labelDataToWork)
+    
+    
+  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, currIteration=0):
    
     imgDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
     if (labelData.dim() == imgData.dim()):
@@ -258,7 +257,8 @@ class Optimize():
     vecLengthLoss = torch.abs(defFields).mean()
     cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.vecLengthW * vecLengthLoss + self.userOpts.cycleW * cycleLoss
-#     print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
+    print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
+    print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
 #     print('loss: %.3f' % (loss))
       
     loss.backward()
@@ -337,20 +337,26 @@ class Optimize():
           print('numberOfiterationsPerEpoch: ', numberOfiterations)
           print('numberofSamplesPerIteration: ', numberofSamplesPerRun)
           if torch.numel(imgData) >= maxNumberOfPixs:
-            doRandomSubSampling = True
             patchSizes = getPatchSize(imgData.shape, imgPatchSize)
-            idxs = self.getIndicesForRandomization(maskData, imgData, imgPatchSize)
+            doSubSampling = True
+            if self.userOpts.oneShot:
+              idxs = self.getIndicesForUniformSampling(maskData, imgData, imgPatchSize)
+              numberofSamplesPerRun = min(len(idxs), numberofSamplesPerRun)
+              subSampleMethod = self.getUniformlyDistributedSubsamples
+            else:
+              idxs = self.getIndicesForRandomization(maskData, imgData, imgPatchSize)
+              subSampleMethod = self.getRandomSubSamples
           else:
-            doRandomSubSampling = False
+            doSubSampling = False
             imgDataToWork = imgData
             labelDataToWork = labelData
           
           imgIteration = 0
           while True:
-            if (doRandomSubSampling):
-              randomSubSamples = self.getRandomSubSamples(numberofSamplesPerRun, idxs, patchSizes, imgData, labelData)
-              imgDataToWork = randomSubSamples[0]
-              labelDataToWork = randomSubSamples[1]
+            if (doSubSampling):
+              subSamples = subSampleMethod(numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, imgIteration)
+              imgDataToWork = subSamples[0]
+              labelDataToWork = subSamples[1]
             loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
             
             numpyLoss = loss.detach().cpu().numpy()
@@ -359,6 +365,9 @@ class Optimize():
               meanLoss = runningLoss.mean()
               logFile.write(str(meanLoss) + ';')
               lossCounter = 0
+              
+              self.userOpts.vecLengthW = self.userOpts.vecLengthW - self.userOpts.vecLengthW * 0.1
+              self.normalizeWeights()
             else:
               lossCounter+=1
             

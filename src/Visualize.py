@@ -18,7 +18,7 @@ def plotDataset(dataset):
           plt.imshow(sample['label'][:,:,slice],cmap='jet', alpha=0.5,)
   plt.show(block=False)
   
-def plotImageData(imageData):
+def plotImageData(imageData, blockFig=False):
   nuOfimg=imageData.shape[0]
   nuOfImgPerAxes=max(1,round(nuOfimg/2,0))
   plt.figure()
@@ -31,4 +31,4 @@ def plotImageData(imageData):
       elif (sample.dim() == 3):
         slice = int(sample.shape[2] / 2)
         plt.imshow(sample[:,:,slice],cmap='gray')
-  plt.show(block=False)
+  plt.show(block=blockFig)
