@@ -105,3 +105,7 @@ def loadImage(filename):
   img0 = np.expand_dims(img0, axis=0)
   img0 = torch.from_numpy(img0)
   return img0
+
+def saveImg(imgData, filename, isVector = False):
+    itkImg = sitk.GetImageFromArray(imgData, isVector=isVector)
+    sitk.WriteImage(itkImg,filename)

@@ -1,6 +1,4 @@
-import SimpleITK as sitk
 import LossFunctions as lf
-import torch
 import numpy as np
 import Utils
 import sys

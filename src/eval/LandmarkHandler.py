@@ -8,14 +8,19 @@ class PointReader():
     currPoints = []
     pointFile = open(filename,'r') 
     filename, file_extension = os.path.splitext(filename)
-    if file_extension == '.fcsv':
+    if file_extension == '.fcsv':#slicer datasets
       for line in pointFile:
         pointsStr = line.split(',')
         point = (np.float32(pointsStr[1]), np.float32(pointsStr[2]), np.float32(pointsStr[3]))
         currPoints.append(point)      
-    elif file_extension == '.pts':
+    elif file_extension == '.pts':#popi datasets
       for line in pointFile:
         pointsStr = line.split( )
+        point = (np.float32(pointsStr[0]), np.float32(pointsStr[1]), np.float32(pointsStr[2]))
+        currPoints.append(point)
+    elif file_extension == '.txt':#dirlab datasetes
+      for line in pointFile:
+        pointsStr = line.split('\t')
         point = (np.float32(pointsStr[0]), np.float32(pointsStr[1]), np.float32(pointsStr[2]))
         currPoints.append(point)
     return currPoints

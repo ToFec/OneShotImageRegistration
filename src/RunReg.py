@@ -86,7 +86,8 @@ def main(argv):
     trainTestOptimize.saveNet(modelFileName)
     
   if userOpts.testMode:
-#     trainTestOptimize.loadNet(modelFileName)
+    if not userOpts.trainMode:
+      trainTestOptimize.loadNet(modelFileName)
     trainTestOptimize.testNet(dataloader)
 
 

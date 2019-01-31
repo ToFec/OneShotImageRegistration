@@ -63,9 +63,9 @@ class Optimize():
           imgDataToWork = subSamples[0]
           imgDataToWork = imgDataToWork.to(self.userOpts.device)
           indexArray[idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += 1
-          defFields[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += self.net(imgDataToWork)
-        
-         
+          tmpField = self.net(imgDataToWork)
+          defFields[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += tmpField
+
         indexArray[indexArray < 1] = 1
         
         for dim0 in range(0, defFields.shape[0]):
@@ -75,35 +75,38 @@ class Optimize():
   
         del indexArray
         
-        zeroDefField = getZeroDefField(imgShape)
-        zeroDefField = zeroDefField.to(self.userOpts.device)
-        for imgIdx in range(imgShape[0]):
-          for chanIdx in range(-1, imgShape[1] - 1):
-            imgToDef = imgData[None, None, imgIdx, chanIdx, ]
-            imgToDef = imgToDef.to(self.userOpts.device)
-            chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-            deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
-            
-            imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ])
-            imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
-            
-            dataloader.dataset.saveData(imgDataDef, self.userOpts.outputPath, 'deformedImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
-            dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
-            defX = defFields[imgIdx, chanIdx * 3, ].detach()
-            defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach()
-            defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach()
-            defField = getDefField(defX, defY, defZ)
-            defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-            dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(i) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', i, False)
-            
-            
-            if (len(landmarkData) > 0):
-              defField = np.moveaxis(defField, 0, 2)
-              defField = np.moveaxis(defField, 0, 1)
-              defField = torch.from_numpy(defField)
-              currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
-              deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[i], dataloader.dataset.spacings[i])
-              pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
+        self.saveResults(imgData, landmarkData, defFields, dataloader, i)
+        
+  def saveResults(self, imgData, landmarkData, defFields, dataloader, datasetIdx):
+    pp = PointProcessor()
+    pr = PointReader()
+    for imgIdx in range(imgData.shape[0]):
+      for chanIdx in range(-1, imgData.shape[1] - 1):
+        imgToDef = imgData[None, None, imgIdx, chanIdx, ]
+        imgToDef = imgToDef.to(self.userOpts.device)
+        chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+        deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
+        
+        imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ])
+        imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
+        
+        dataloader.dataset.saveData(imgDataDef, self.userOpts.outputPath, 'deformedImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
+        dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
+        defX = defFields[imgIdx, chanIdx * 3, ].detach()
+        defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach()
+        defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach()
+        defField = getDefField(defX, defY, defZ)
+        defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
+        dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
+        
+        
+        if (len(landmarkData) > 0):
+          defField = np.moveaxis(defField, 0, 2)
+          defField = np.moveaxis(defField, 0, 1)
+          defField = torch.from_numpy(defField)
+          currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
+          deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[datasetIdx], dataloader.dataset.spacings[datasetIdx])
+          pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
   def getIndicesForRandomization(self, maskData, imgData, imgPatchSize):
     maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
@@ -122,29 +125,28 @@ class Optimize():
     if (maskData.dim() != imgData.dim()):
       maskData = torch.ones(imgShape, dtype=torch.int8)
 
-    maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
+    maxIdxs = getMaxIdxs(imgShape, imgPatchSize)
     patchSizes = getPatchSize(imgData.shape, imgPatchSize)
-    print(patchSizes)
-    
+    maskChanSum = torch.sum(maskData, 1)
     idxs = []
-    for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]):
-      for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]):
-        for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]):
-          if (maskData[:, :, patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].sum() > 0):
+    for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]/2):
+      for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]/2):
+        for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]/2):
+          if (maskChanSum[:,patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].median() > 0):
             idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
        
     leftover0 = imgShape[2] % patchSizes[0]
-    startidx0 = patchSizes[0] / 2 if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else leftover0
+    startidx0 = imgShape[2] - patchSizes[0] if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else 0
     leftover1 = imgShape[3] % patchSizes[1]
-    startidx1 = patchSizes[1] / 2 if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else leftover1
+    startidx1 = imgShape[3] - patchSizes[1] if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else 0
     leftover2 = imgShape[4] % patchSizes[2]
-    startidx2 = patchSizes[2] / 2 if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else leftover2
+    startidx2 = imgShape[4] - patchSizes[2] if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else 0
     
     if (startidx2 + startidx1 + startidx0 > 0) :               
-      for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]):
-        for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]):
-          for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]):
-            if (maskData[:, :, patchIdx0, patchIdx1, patchIdx2].sum() > 0):
+      for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]/2):
+        for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]/2):
+          for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]/2):
+            if (maskChanSum[:,patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].median() > 0):
               idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
               
     return idxs
@@ -228,10 +230,10 @@ class Optimize():
     
     imgDataDef = torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)
     
-    cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
+#     cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
     
     #         cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
-    cycleIdxData = zeroDefField.clone()
+   # cycleIdxData = zeroDefField.clone()
     
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
@@ -239,25 +241,25 @@ class Optimize():
       deformedTmp = deformImage(imgToDef, defFields[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-      cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
-                  
-      cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
-      cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
-      cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
-    
-    del zeroDefField, cycleIdxData
+#       cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
+#                   
+#       cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
+#       cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
+#       cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
+#     
+#     del zeroDefField, cycleIdxData
           
     crossCorr = lf.normCrossCorr(imgDataToWork, imgDataDef)
-    if imgDataToWork.shape[1] > 3:
-      smoothnessDF = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
-    else:
-      smoothnessDF = lf.smoothnessVecField(defFields, self.userOpts.device)
-    
-  #   vecLengthLoss = lf.vecLength(defFields)
-    vecLengthLoss = torch.abs(defFields).mean()
-    cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
-    loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.vecLengthW * vecLengthLoss + self.userOpts.cycleW * cycleLoss
-    print('cc: %.5f smmothness: %.5f vecLength: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, vecLengthLoss, cycleLoss))
+#     if imgDataToWork.shape[1] > 3:
+#       smoothnessDF = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
+#     else:
+#       smoothnessDF = lf.smoothnessVecField(defFields, self.userOpts.device)
+#     
+#     cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
+#     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.cycleW * cycleLoss
+    loss = crossCorr
+    print('cc: %.5f ' % (crossCorr))
+    #print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
 #     print('loss: %.3f' % (loss))
       
@@ -329,7 +331,7 @@ class Optimize():
           
           maxNumberOfPixs = imgPatchSize * imgPatchSize * imgPatchSize * imgData.shape[1] + 1
           
-          numberofSamples = (torch.numel(imgData) / maxNumberOfPixs) + 1
+          numberofSamples = (torch.numel(imgData) / (maxNumberOfPixs/8)) + 1 #we divide by 8 as we need overlapping samples; e.g. when using uniform sampling we shift the sample window by half of the patch size
           numberOfiterations = (numberofSamples / self.userOpts.maxNumberOfSamples) + 1
           numberOfiterations *= tmpEpochs
           numberofSamplesPerRun = min(numberofSamples, self.userOpts.maxNumberOfSamples - 1)
