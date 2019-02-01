@@ -109,3 +109,11 @@ def loadImage(filename):
 def saveImg(imgData, filename, isVector = False):
     itkImg = sitk.GetImageFromArray(imgData, isVector=isVector)
     sitk.WriteImage(itkImg,filename)
+    
+def normalizeImg(img):
+  imgMean = img.mean()
+  imgData = img - imgMean
+  imgStd = imgData.std()
+  imgData = imgData / imgStd
+  return imgData
+    

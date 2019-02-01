@@ -9,8 +9,11 @@ import LossFunctions as lf
 from torch.utils.data import dataloader
 from eval.LandmarkHandler import PointProcessor, PointReader
 
+from Sampler import Sampler
+
 import os
 import Visualize
+from workspace.SimpleElastix.build.ITK.Wrapping.Generators.Python.Tests.AntiAliasBinaryImageFilter import numberOfIterations
 
 
 class Optimize():
@@ -22,7 +25,16 @@ class Optimize():
     
     self.net.to(self.userOpts.device)
     self.finalNumberIterations = [0,0]
-
+    
+    logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
+    self.logFile = open(logfileName,'w', buffering=0)
+    
+  def __enter__(self):
+        return self
+      
+  def __exit__(self, exc_type, exc_value, traceback):
+    self.logFile.close()
+    
   
   def normalizeWeights(self):
     weightSum = self.userOpts.ccW + self.userOpts.smoothW + self.userOpts.vecLengthW + self.userOpts.cycleW 
@@ -59,7 +71,7 @@ class Optimize():
         defFields = torch.zeros((imgShape[0], imgShape[1] * 3, imgShape[2], imgShape[3], imgShape[4]), device=self.userOpts.device, requires_grad=False)
         indexArray = torch.zeros((imgShape[2], imgShape[3], imgShape[4]), device=self.userOpts.device, requires_grad=False)
         for idx in idxs:
-          subSamples = self.getUniformlyDistributedSubsamples(numberofSamplesPerRun, (idx,), patchSizes, imgData, labelData, 0)
+          subSamples = self.getUniformlyDistributedSubsamples(numberofSamplesPerRun, (idx,), 0)
           imgDataToWork = subSamples[0]
           imgDataToWork = imgDataToWork.to(self.userOpts.device)
           indexArray[idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]] += 1
@@ -108,49 +120,6 @@ class Optimize():
           deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[datasetIdx], dataloader.dataset.spacings[datasetIdx])
           pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
-  def getIndicesForRandomization(self, maskData, imgData, imgPatchSize):
-    maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
-    if (maskData.dim() == imgData.dim()):
-      maskDataCrop = maskData[:, :, 0:maxIdxs[0], 0:maxIdxs[1], 0:maxIdxs[2]]
-    else: 
-      maskDataCrop = torch.ones((imgData.shape[0], imgData.shape[1], maxIdxs[0], maxIdxs[1], maxIdxs[2]), dtype=torch.int8)
-    
-    maskChanSum = torch.sum(maskDataCrop, 1)
-    idxs = np.where(maskChanSum > 0)
-  
-    return idxs
-  
-  def getIndicesForUniformSampling(self, maskData, imgData, imgPatchSize):
-    imgShape = imgData.shape
-    if (maskData.dim() != imgData.dim()):
-      maskData = torch.ones(imgShape, dtype=torch.int8)
-
-    maxIdxs = getMaxIdxs(imgShape, imgPatchSize)
-    patchSizes = getPatchSize(imgData.shape, imgPatchSize)
-    maskChanSum = torch.sum(maskData, 1)
-    idxs = []
-    for patchIdx0 in range(0, maxIdxs[0], patchSizes[0]/2):
-      for patchIdx1 in range(0, maxIdxs[1], patchSizes[1]/2):
-        for patchIdx2 in range(0, maxIdxs[2], patchSizes[2]/2):
-          if (maskChanSum[:,patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].median() > 0):
-            idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
-       
-    leftover0 = imgShape[2] % patchSizes[0]
-    startidx0 = imgShape[2] - patchSizes[0] if (leftover0 > 0) & (maxIdxs[0] > patchSizes[0])  else 0
-    leftover1 = imgShape[3] % patchSizes[1]
-    startidx1 = imgShape[3] - patchSizes[1] if (leftover1 > 0) & (maxIdxs[1] > patchSizes[1])  else 0
-    leftover2 = imgShape[4] % patchSizes[2]
-    startidx2 = imgShape[4] - patchSizes[2] if (leftover2 > 0) & (maxIdxs[2] > patchSizes[2])  else 0
-    
-    if (startidx2 + startidx1 + startidx0 > 0) :               
-      for patchIdx0 in range(startidx0, maxIdxs[0], patchSizes[0]/2):
-        for patchIdx1 in range(startidx1, maxIdxs[1], patchSizes[1]/2):
-          for patchIdx2 in range(startidx2, maxIdxs[2], patchSizes[2]/2):
-            if (maskChanSum[:,patchIdx0:patchIdx0 + patchSizes[0], patchIdx1:patchIdx1 + patchSizes[1], patchIdx2:patchIdx2 + patchSizes[2]].median() > 0):
-              idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
-              
-    return idxs
-      
   def save_grad(self, name):
   
       def hook(grad):
@@ -164,59 +133,7 @@ class Optimize():
     torch.cuda.synchronize()
     print(torch.cuda.memory_allocated())
   
-  def getUniformlyDistributedSubsamples(self,numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, currIteration):
-    
-    startIdx = currIteration % numberofSamplesPerRun
-    
-    
-    imgDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
-    if (labelData.dim() == imgData.dim()):
-      labelDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
-    
-    iterationRange = np.arange(startIdx,startIdx+numberofSamplesPerRun)
-    iterationRange[iterationRange >= len(idxs)] = iterationRange[iterationRange >= len(idxs)] - len(idxs)
-    j = 0
-    for i in iterationRange:
-      idx = idxs[i]
-      imgDataNew[j, ] = imgData[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]]
-      if (labelData.dim() == imgData.dim()):
-        labelDataNew[j, ] = labelData[:, :, idx[0]:idx[0] + patchSizes[0], idx[1]:idx[1] + patchSizes[1], idx[2]:idx[2] + patchSizes[2]]
-      j=j+1
-      
-    imgDataToWork = imgDataNew
-    if (labelData.dim() == imgData.dim()):
-      labelDataToWork = labelDataNew
-    else:
-      labelDataToWork = torch.Tensor();
-      
-    return (imgDataToWork, labelDataToWork)
-    
-    
-  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, currIteration=0):
    
-    imgDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
-    if (labelData.dim() == imgData.dim()):
-      labelDataNew = torch.empty((numberofSamplesPerRun, imgData.shape[1], patchSizes[0], patchSizes[1], patchSizes[2]), requires_grad=False)
-    
-    randSampleIdxs = np.random.randint(0, len(idxs[0]), (numberofSamplesPerRun,))
-    for j in range(0, numberofSamplesPerRun):
-      idx0 = idxs[0][randSampleIdxs[j]]
-      idx2 = idxs[1][randSampleIdxs[j]]
-      idx3 = idxs[2][randSampleIdxs[j]]
-      idx4 = idxs[3][randSampleIdxs[j]]
-      imgDataNew[j, ] = imgData[idx0, : , idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]]
-  #     indexArrayTest[idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]] += 1
-      if (labelData.dim() == imgData.dim()):
-        labelDataNew[j, ] = labelData[idx0, : , idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]]
-    
-    imgDataToWork = imgDataNew
-    if (labelData.dim() == imgData.dim()):
-      labelDataToWork = labelDataNew
-    else:
-      labelDataToWork = torch.Tensor();
-      
-    return (imgDataToWork, labelDataToWork)
-  
   def optimizeNet(self, imgDataToWork, labelToWork, optimizer):
     zeroDefField = getZeroDefField(imgDataToWork.shape)
     imgDataToWork = imgDataToWork.to(self.userOpts.device)
@@ -291,6 +208,79 @@ class Optimize():
     else:
       return False
   
+  def trainTestNet(self, dataloader):
+    optimizer = optim.Adam(self.net.parameters())
+    if self.userOpts.trainTillConvergence:
+      iterationValidation = self.terminateLoopByLossAndItCount
+    else:
+      iterationValidation = self.terminateLoopByItCount
+    
+    numberOfiterations = self.userOpts.numberOfEpochs
+    nuOfLayers = self.userOpts.netDepth
+    receptiveFieldOffset = 2^nuOfLayers
+    for i in range(nuOfLayers-1,0,-1):
+      receptiveFieldOffset += 2*2^i
+    
+    for i, data in enumerate(dataloader, 0):
+        # get the inputs
+        imgData = data['image']
+        labelData = data['label']
+        maskData = data['mask']
+        landmarkData = data['landmarks']
+        
+        defFields = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+        indexArray = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+        
+        sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
+        idxs = sampler.getIndicesForOneShotSampling(self.userOpts.receptiveField)
+        for idx in idxs:
+          self.net.train()
+          subSample = sampler.getSubSample(idx, self.userOpts.normImgPatches)
+          imgDataToWork = subSample[0]
+          labelDataToWork = subSample[1]
+          imgDataToWork = imgDataToWork.to(self.userOpts.device)
+          patchIteration=0
+          lossCounter = 0
+          runningLoss = np.ones(10)
+          while True:
+            loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
+            patchIteration+=1
+            
+            numpyLoss = loss.detach().cpu().numpy()
+            runningLoss[lossCounter] = numpyLoss
+            if lossCounter == 9:
+              meanLoss = runningLoss.mean()
+              self.logFile.write(str(meanLoss) + ';')
+              lossCounter = 0
+            else:
+              lossCounter+=1
+            
+            if (iterationValidation(numpyLoss, runningLoss, patchIteration, numberOfiterations, 0)):
+              break
+          
+          self.net.eval()
+          startImgIdx0 = idx[0] + receptiveFieldOffset
+          startImgIdx1 = idx[1] + receptiveFieldOffset
+          startImgIdx2 = idx[2] + receptiveFieldOffset
+          endImgIdx0 = startImgIdx0 + self.userOpts.receptiveField[0]
+          endImgIdx1 = startImgIdx1 + self.userOpts.receptiveField[1]
+          endImgIdx2 = startImgIdx2 + self.userOpts.receptiveField[2]
+          indexArray[startImgIdx0:endImgIdx0, startImgIdx1:endImgIdx1, startImgIdx2:endImgIdx2] += 1
+          tmpField = self.net(imgDataToWork)
+          defFields[:, :, startImgIdx0:endImgIdx0, startImgIdx1:endImgIdx1, startImgIdx2:endImgIdx2] += tmpField
+          
+        indexArray[indexArray < 1] = 1
+        
+        for dim0 in range(0, defFields.shape[0]):
+          for dim1 in range(0, defFields.shape[1]):
+            defFieldsTmp = defFields[dim0, dim1, ] / indexArray
+            defFields[dim0, dim1, ] = smoothArray3D(defFieldsTmp, self.userOpts.device)
+  
+        del indexArray
+        
+        self.saveResults(imgData, landmarkData, defFields, dataloader, i)
+            
+    
   def trainNet(self, dataloader):
     self.net.train()
     optimizer = optim.Adam(self.net.parameters())
@@ -313,8 +303,6 @@ class Optimize():
         epochValidation =  self.terminateLoopByItCount
       datasetIterationValidation = self.terminateLoopByItCount
       
-    logfile = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'    
-    logFile = open(logfile,'w', buffering=0)  
     lossCounter = 0
     runningLoss = np.ones(10)  
     print('epochs: ', epochs)
@@ -325,6 +313,8 @@ class Optimize():
           imgData = data['image']
           labelData = data['label']
           maskData = data['mask']
+          
+          sampler = Sampler(maskData, imgData, labelData, imgPatchSize)
           
           icc = lf.normCrossCorr(imgData, imgData[:,range(-1,imgData.shape[1]-1),])
           print('inital cross corr: ', icc)
@@ -339,15 +329,14 @@ class Optimize():
           print('numberOfiterationsPerEpoch: ', numberOfiterations)
           print('numberofSamplesPerIteration: ', numberofSamplesPerRun)
           if torch.numel(imgData) >= maxNumberOfPixs:
-            patchSizes = getPatchSize(imgData.shape, imgPatchSize)
             doSubSampling = True
             if self.userOpts.oneShot:
-              idxs = self.getIndicesForUniformSampling(maskData, imgData, imgPatchSize)
+              idxs = sampler.getIndicesForUniformSampling()
               numberofSamplesPerRun = min(len(idxs), numberofSamplesPerRun)
-              subSampleMethod = self.getUniformlyDistributedSubsamples
+              subSampleMethod = sampler.getUniformlyDistributedSubsamples
             else:
-              idxs = self.getIndicesForRandomization(maskData, imgData, imgPatchSize)
-              subSampleMethod = self.getRandomSubSamples
+              idxs = sampler.getIndicesForRandomization()
+              subSampleMethod = sampler.getRandomSubSamples
           else:
             doSubSampling = False
             imgDataToWork = imgData
@@ -356,7 +345,7 @@ class Optimize():
           imgIteration = 0
           while True:
             if (doSubSampling):
-              subSamples = subSampleMethod(numberofSamplesPerRun, idxs, patchSizes, imgData, labelData, imgIteration)
+              subSamples = subSampleMethod(numberofSamplesPerRun, idxs, imgIteration)
               imgDataToWork = subSamples[0]
               labelDataToWork = subSamples[1]
             loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
@@ -365,7 +354,7 @@ class Optimize():
             runningLoss[lossCounter] = numpyLoss
             if lossCounter == 9:
               meanLoss = runningLoss.mean()
-              logFile.write(str(meanLoss) + ';')
+              self.logFile.write(str(meanLoss) + ';')
               lossCounter = 0
             else:
               lossCounter+=1
@@ -379,7 +368,7 @@ class Optimize():
       if (epochValidation(numpyLoss, runningLoss, epochCount, epochs, 1)):
         break
       
-    logFile.close()  
+      
     return loss    
 
 

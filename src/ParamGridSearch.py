@@ -43,7 +43,7 @@ def main(argv):
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
-  headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True, SmoothImage())
+  headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
@@ -79,24 +79,24 @@ def main(argv):
           userOpts.ccW = cCW
           userOpts.vecLengthW = vecLengthW
           
-          trainTestOptimize = Optimize(net, userOpts)
-          start = time.time()
-          trainTestOptimize.trainNet(dataloader)
-          end = time.time()
-          
-          timeForTraining = end - start
-          finalLoss = trainTestOptimize.finalLoss
-          numberofiterations = trainTestOptimize.finalNumberIterations
-          
-          logfile = userOpts.outputPath + os.path.sep + 'lossIterLog.csv'    
-          logFile = open(logfile,'w', buffering=0)
-          logFile.write('timeForTraining;finalLoss;numberofiterations\n')
-          logFile.write(str(timeForTraining) + ';')
-          logFile.write(str(finalLoss.item()) + ';')
-          logFile.write(str(numberofiterations))
-          logFile.close()
-          
-          trainTestOptimize.testNet(dataloader)
+          with Optimize(net, userOpts) as trainTestOptimize:
+            start = time.time()
+            trainTestOptimize.trainNet(dataloader)
+            end = time.time()
+            
+            timeForTraining = end - start
+            finalLoss = trainTestOptimize.finalLoss
+            numberofiterations = trainTestOptimize.finalNumberIterations
+            
+            logfile = userOpts.outputPath + os.path.sep + 'lossIterLog.csv'    
+            logFile = open(logfile,'w', buffering=0)
+            logFile.write('timeForTraining;finalLoss;numberofiterations\n')
+            logFile.write(str(timeForTraining) + ';')
+            logFile.write(str(finalLoss.item()) + ';')
+            logFile.write(str(numberofiterations))
+            logFile.close()
+            
+            trainTestOptimize.testNet(dataloader)
           
           for f in glob (userOpts.outputPath + os.path.sep + 'deformedImgDataset*'):
             os.unlink (f)

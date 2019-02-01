@@ -15,5 +15,7 @@ outputPath='.'
 patchSize=64
 maxNumberOfSamples=6 # samples for one batch must be < maxNumberOfSamples
 netDepth=3
+receptiveField = (44, 44, 44) #adapt depth and receptive field according to ReceptiveFieldSizeCalculator in repository
+normImgPatches=False
 trainTillConvergence = False
 lossTollerance=0.00000001

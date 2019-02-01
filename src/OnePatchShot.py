@@ -59,37 +59,27 @@ def main(argv):
                         shuffle=False, num_workers=0)
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, useDeepSelfSupervision=False)
-  with Optimize(net, userOpts) as trainTestOptimize:
-    print(net)
-    if not os.path.isdir(userOpts.outputPath):
-      os.makedirs(userOpts.outputPath)
-    modelFileName = userOpts.outputPath + os.path.sep + 'UNetfinalParams.pt'
-    if userOpts.trainMode:
-      start = time.time()
-      if False:  # device == "cpu":
-        net.share_memory()
-        processes = []
-        num_processes = 2
-        for rank in range(num_processes):
-          p = mp.Process(target=trainTestOptimize.trainNet, args=(net, dataloader, userOpts))
-          p.start()
-          processes.append(p)
-        for p in processes:
-          p.join()
-            
-      else:
-        trainTestOptimize.trainNet(dataloader)
-      end = time.time()
-      print('Training took:', end - start, 'seconds')
-      print('final loss:', trainTestOptimize.finalLoss)
-      print('number of iterations:', trainTestOptimize.finalNumberIterations)
-      trainTestOptimize.saveNet(modelFileName)
-      
-    if userOpts.testMode:
-      if not userOpts.trainMode:
-        trainTestOptimize.loadNet(modelFileName)
-      trainTestOptimize.testNet(dataloader)
-
+  trainTestOptimize = Optimize(net, userOpts)
+  print(net)
+  if not os.path.isdir(userOpts.outputPath):
+    os.makedirs(userOpts.outputPath)
+  start = time.time()
+  if userOpts.device == "cpu":
+    net.share_memory()
+    processes = []
+    num_processes = 2
+    for rank in range(num_processes):
+      p = mp.Process(target=trainTestOptimize.trainNet, args=(net, dataloader, userOpts))
+      p.start()
+      processes.append(p)
+    for p in processes:
+      p.join()
+        
+  else:
+    trainTestOptimize.trainNet(dataloader)
+  end = time.time()
+  print('Registration took:', end - start, 'seconds')
+    
 
 if __name__ == "__main__":
   main(sys.argv[1:]) 
