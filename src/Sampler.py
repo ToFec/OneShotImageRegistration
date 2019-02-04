@@ -88,8 +88,9 @@ class Sampler(object):
   
     return idxs
   
-  def getIndicesForOneShotSampling(self, receptiveFieldSize):
-    return self.getIndicesForUniformSamplingPathShift(receptiveFieldSize)  
+  def getIndicesForOneShotSampling(self, shift):
+    shift = self.patchSizes - 2*shift
+    return self.getIndicesForUniformSamplingPathShift(shift)  
   
   def iterateImg(self, startidx, shift):
     idxs = []
@@ -114,14 +115,15 @@ class Sampler(object):
     startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) & (self.maxIdxs[2] > self.patchSizes[2])  else 0
     
     if startidx0 > 0:
-      idxs.append( self.iterateImg((startidx0, 0, 0), patchShift))
+      idxs = idxs + self.iterateImg((startidx0, 0, 0), patchShift)
     if startidx1 > 0:
-      idxs.append( self.iterateImg((0, startidx1, 0), patchShift))
+      idxs = idxs + self.iterateImg((0, startidx1, 0), patchShift)
     if startidx2 > 0:
-      idxs.append( self.iterateImg((0, 0, startidx2), patchShift))
+      idxs = idxs + self.iterateImg((0, 0, startidx2), patchShift)
       
     return idxs
     
   def getIndicesForUniformSampling(self):
-    return self.getIndicesForUniformSamplingPathShift(self.patchSizes / 2)
+    shift = (self.patchSizes[0] / 2,self.patchSizes[1] / 2,self.patchSizes[2] / 2)
+    return self.getIndicesForUniformSamplingPathShift(shift)
     

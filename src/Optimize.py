@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 
 import numpy as np
-from Utils import getDefField, getZeroDefField, smoothArray3D, getMaxIdxs, getPatchSize, deformImage
+from Utils import getDefField, getZeroDefField, smoothArray3D, getPatchSize, deformImage, saveImg
 import SimpleITK as sitk
 
 import LossFunctions as lf
@@ -13,7 +13,6 @@ from Sampler import Sampler
 
 import os
 import Visualize
-from workspace.SimpleElastix.build.ITK.Wrapping.Generators.Python.Tests.AntiAliasBinaryImageFilter import numberOfIterations
 
 
 class Optimize():
@@ -217,9 +216,9 @@ class Optimize():
     
     numberOfiterations = self.userOpts.numberOfEpochs
     nuOfLayers = self.userOpts.netDepth
-    receptiveFieldOffset = 2^nuOfLayers
-    for i in range(nuOfLayers-1,0,-1):
-      receptiveFieldOffset += 2*2^i
+#     receptiveFieldOffset = np.power(2,nuOfLayers)
+#     for i in range(nuOfLayers-1,0,-1):
+#       receptiveFieldOffset += 2*np.power(2,i)
     
     for i, data in enumerate(dataloader, 0):
         # get the inputs
@@ -232,7 +231,8 @@ class Optimize():
         indexArray = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
         
         sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
-        idxs = sampler.getIndicesForOneShotSampling(self.userOpts.receptiveField)
+        #idxs = sampler.getIndicesForOneShotSampling(receptiveFieldOffset)
+        idxs = sampler.getIndicesForUniformSampling()
         for idx in idxs:
           self.net.train()
           subSample = sampler.getSubSample(idx, self.userOpts.normImgPatches)
@@ -258,17 +258,17 @@ class Optimize():
             if (iterationValidation(numpyLoss, runningLoss, patchIteration, numberOfiterations, 0)):
               break
           
-          self.net.eval()
-          startImgIdx0 = idx[0] + receptiveFieldOffset
-          startImgIdx1 = idx[1] + receptiveFieldOffset
-          startImgIdx2 = idx[2] + receptiveFieldOffset
-          endImgIdx0 = startImgIdx0 + self.userOpts.receptiveField[0]
-          endImgIdx1 = startImgIdx1 + self.userOpts.receptiveField[1]
-          endImgIdx2 = startImgIdx2 + self.userOpts.receptiveField[2]
-          indexArray[startImgIdx0:endImgIdx0, startImgIdx1:endImgIdx1, startImgIdx2:endImgIdx2] += 1
-          tmpField = self.net(imgDataToWork)
-          defFields[:, :, startImgIdx0:endImgIdx0, startImgIdx1:endImgIdx1, startImgIdx2:endImgIdx2] += tmpField
+          with torch.no_grad():
+            self.net.eval()
+            startImgIdx0 = idx[0]# + receptiveFieldOffset
+            startImgIdx1 = idx[1]# + receptiveFieldOffset
+            startImgIdx2 = idx[2]# + receptiveFieldOffset
+            tmpField = self.net(imgDataToWork)
+            #subField = tmpField[:, :, receptiveFieldOffset:-receptiveFieldOffset, receptiveFieldOffset:-receptiveFieldOffset, receptiveFieldOffset:-receptiveFieldOffset]
+            defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
+            indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += 1
           
+        saveImg(indexArray, self.userOpts.outputPath + os.path.sep + 'indexArray.nrrd')
         indexArray[indexArray < 1] = 1
         
         for dim0 in range(0, defFields.shape[0]):

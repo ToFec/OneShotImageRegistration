@@ -18,10 +18,10 @@ def main(argv):
   
   #torch.backends.cudnn.enabled = False
   #CUDA_LAUNCH_BLOCKING = 1
-  callString = 'RunReg.py --trainingFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH --testMode --trainMode --validationMode --oneShot'
+  callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'numberOfEpochs=', 'outputPath=', 'testMode', 'trainMode', 'validationMode', 'oneShot'])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'numberOfEpochs=', 'outputPath='])
   except getopt.GetoptError, e:
     print(e)
     print(callString)
@@ -40,13 +40,6 @@ def main(argv):
       userOpts.outputPath = arg      
     elif opt == '--numberOfEpochs':
       userOpts.numberOfEpochs = int(arg)
-    elif opt == '--testMode':
-      userOpts.testMode = True
-    elif opt == '--trainMode':
-      userOpts.trainMode = True
-    elif opt == '--oneShot':
-      userOpts.oneShot = True
-                
       
   torch.manual_seed(0)
   np.random.seed(0)
@@ -59,26 +52,26 @@ def main(argv):
                         shuffle=False, num_workers=0)
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, useDeepSelfSupervision=False)
-  trainTestOptimize = Optimize(net, userOpts)
-  print(net)
-  if not os.path.isdir(userOpts.outputPath):
-    os.makedirs(userOpts.outputPath)
-  start = time.time()
-  if userOpts.device == "cpu":
-    net.share_memory()
-    processes = []
-    num_processes = 2
-    for rank in range(num_processes):
-      p = mp.Process(target=trainTestOptimize.trainNet, args=(net, dataloader, userOpts))
-      p.start()
-      processes.append(p)
-    for p in processes:
-      p.join()
-        
-  else:
-    trainTestOptimize.trainNet(dataloader)
-  end = time.time()
-  print('Registration took:', end - start, 'seconds')
+  with Optimize(net, userOpts) as trainTestOptimize:
+    print(net)
+    if not os.path.isdir(userOpts.outputPath):
+      os.makedirs(userOpts.outputPath)
+    start = time.time()
+    if False:#userOpts.device == "cpu":
+      net.share_memory()
+      processes = []
+      num_processes = 2
+      for rank in range(num_processes):
+        p = mp.Process(target=trainTestOptimize.trainTestNet, args=(net, dataloader, userOpts))
+        p.start()
+        processes.append(p)
+      for p in processes:
+        p.join()
+          
+    else:
+      trainTestOptimize.trainTestNet(dataloader)
+    end = time.time()
+    print('Registration took:', end - start, 'seconds')
     
 
 if __name__ == "__main__":
