@@ -6,8 +6,10 @@ from EncoderBrick import EncoderBrick
 from DecoderBrick import DecoderBrick
 from SelfSupervisionBrick import SelfSupervisionBrick
 
+from numpy import power
+
 class UNet(nn.Module):
-  def __init__(self, in_channels=2, useBatchNorm=True, concatLayer=True, depth = 5, numberOfFiltersFirstLayer=32, useDeepSelfSupervision = False):
+  def __init__(self, in_channels=2, useBatchNorm=True, concatLayer=True, depth = 5, numberOfFiltersFirstLayer=32, useDeepSelfSupervision = False, padImg=True):
     super(UNet, self).__init__()
     
     if (depth < 2):
@@ -27,30 +29,44 @@ class UNet(nn.Module):
     for i in range(self.depth):
       currentNumberOfInputChannels = self.in_channels if i == 0 else outputFilterNumber
       outputFilterNumber = numberOfFiltersFirstLayer*(2**i)
-      self.encoders.append( EncoderBrick(outputFilterNumber, currentNumberOfInputChannels, self.useBatchNorm, self.concatLayer) )
+      self.encoders.append( EncoderBrick(outputFilterNumber, currentNumberOfInputChannels, self.useBatchNorm, self.concatLayer, padImg) )
       if ( i < self.depth-1):
         self.pools.append( nn.AvgPool3d(2, 2) )
-        self.decoders.append( DecoderBrick(outputFilterNumber, outputFilterNumber*2, self.useBatchNorm, self.concatLayer) )
+        self.decoders.append( DecoderBrick(outputFilterNumber, outputFilterNumber*2, self.useBatchNorm, self.concatLayer, padImg) )
       if self.useDeepSelfSupervision:
-        self.selfSupervisions.append(SelfSupervisionBrick(in_channels, outputFilterNumber, i))
+        self.selfSupervisions.append(SelfSupervisionBrick(in_channels, outputFilterNumber, i, padImg))
     
     if not self.useDeepSelfSupervision:
-      self.selfSupervisions.append(SelfSupervisionBrick(in_channels, numberOfFiltersFirstLayer, 0))
+      self.selfSupervisions.append(SelfSupervisionBrick(in_channels, numberOfFiltersFirstLayer, 0, padImg))
       
     self.encoders = nn.ModuleList(self.encoders)
     self.decoders = nn.ModuleList(self.decoders)
     self.pools = nn.ModuleList(self.pools)
     self.selfSupervisions = nn.ModuleList(self.selfSupervisions)
+
+    self.receptiveFieldOffsets = [0] * (depth - 1)
+    if not padImg:
+      offsetBase = 2
+      offsetCenter = 2
+      for i in range(depth-1):
+        offsetCenter = offsetBase * offsetCenter
+        offset = offsetCenter
+        for j in range(i):
+          offset += 2* power(offsetBase,2+j)
+        self.receptiveFieldOffsets[i] = offset
+    
     
     self.reset_params()   
     
 
   def forward(self, x):
+    
     encoder_outs = []
     supervisionInputs = range(len(self.encoders))
     for i, encoder in enumerate(self.encoders):
       x = encoder(x)
-      encoder_outs.append(x)
+      rFOffSet = self.receptiveFieldOffsets[self.depth - 2 - i]
+      encoder_outs.append(x[:,:,rFOffSet:x.shape[2]-rFOffSet, rFOffSet:x.shape[3]-rFOffSet, rFOffSet:x.shape[4]-rFOffSet])
       if ( i < self.depth-1):
         x = self.pools[i](x)
       else:

@@ -88,11 +88,11 @@ class Sampler(object):
   
     return idxs
   
-  def getIndicesForOneShotSampling(self, shift):
-    shift = self.patchSizes - 2*shift
-    return self.getIndicesForUniformSamplingPathShift(shift)  
+  def getIndicesForOneShotSampling(self, minusShift):
+    patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
+    return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=False)  
   
-  def iterateImg(self, startidx, shift):
+  def iterateImgMedian(self, startidx, shift):
     idxs = []
     for patchIdx0 in range(startidx[0], self.maxIdxs[0], shift[0]):
       for patchIdx1 in range(startidx[1], self.maxIdxs[1], shift[1]):
@@ -100,12 +100,26 @@ class Sampler(object):
           if (self.maskChanSum[:,patchIdx0:patchIdx0 + self.patchSizes[0], patchIdx1:patchIdx1 + self.patchSizes[1], patchIdx2:patchIdx2 + self.patchSizes[2]].median() > 0):
             idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
     return idxs
+
+  def iterateImgSum(self, startidx, shift):
+    idxs = []
+    for patchIdx0 in range(startidx[0], self.maxIdxs[0], shift[0]):
+      for patchIdx1 in range(startidx[1], self.maxIdxs[1], shift[1]):
+        for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
+          if (self.maskChanSum[:,patchIdx0:patchIdx0 + self.patchSizes[0], patchIdx1:patchIdx1 + self.patchSizes[1], patchIdx2:patchIdx2 + self.patchSizes[2]].sum() > 0):
+            idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
+    return idxs  
             
             
-  def getIndicesForUniformSamplingPathShift(self, patchShift):
+  def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=True):
     imgShape = self.imgData.shape
 
-    idxs = self.iterateImg((0,0,0), patchShift)
+    if useMedian:
+      iterateMethod = self.iterateImgMedian
+    else:
+      iterateMethod = self.iterateImgSum
+      
+    idxs = iterateMethod((0,0,0), patchShift)
        
     leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
     startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) & (self.maxIdxs[0] > self.patchSizes[0])  else 0
@@ -115,11 +129,11 @@ class Sampler(object):
     startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) & (self.maxIdxs[2] > self.patchSizes[2])  else 0
     
     if startidx0 > 0:
-      idxs = idxs + self.iterateImg((startidx0, 0, 0), patchShift)
+      idxs = idxs + iterateMethod((startidx0, 0, 0), patchShift)
     if startidx1 > 0:
-      idxs = idxs + self.iterateImg((0, startidx1, 0), patchShift)
+      idxs = idxs + iterateMethod((0, startidx1, 0), patchShift)
     if startidx2 > 0:
-      idxs = idxs + self.iterateImg((0, 0, startidx2), patchShift)
+      idxs = idxs + iterateMethod((0, 0, startidx2), patchShift)
       
     return idxs
     
