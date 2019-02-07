@@ -49,6 +49,12 @@ def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 
     return input[0,0]
   
 def getMaxIdxs(imgShape, imgPatchSize):
+  if type(imgPatchSize) is list or type(imgPatchSize) is tuple:
+    return getMaxIdxsTuple(imgShape, imgPatchSize)
+  else:
+    return getMaxIdxsScalar(imgShape, imgPatchSize)  
+  
+def getMaxIdxsScalar(imgShape, imgPatchSize):
   if imgShape[2] - imgPatchSize > 0:
     maxidx0 = imgShape[2] - imgPatchSize + 1
   else:
@@ -61,6 +67,23 @@ def getMaxIdxs(imgShape, imgPatchSize):
   
   if imgShape[4] - imgPatchSize > 0:
     maxidx2 = imgShape[4] - imgPatchSize + 1
+  else:
+    maxidx2 = 1
+  return (maxidx0, maxidx1, maxidx2)
+
+def getMaxIdxsTuple(imgShape, imgPatchSizes):
+  if imgShape[2] - imgPatchSizes[0] > 0:
+    maxidx0 = imgShape[2] - imgPatchSizes[0] + 1
+  else:
+    maxidx0 = 1
+  
+  if imgShape[3] - imgPatchSizes[1] > 0:
+    maxidx1 = imgShape[3] - imgPatchSizes[1] + 1
+  else:
+    maxidx1 =  1
+  
+  if imgShape[4] - imgPatchSizes[2] > 0:
+    maxidx2 = imgShape[4] - imgPatchSizes[2] + 1
   else:
     maxidx2 = 1
   return (maxidx0, maxidx1, maxidx2)
@@ -81,7 +104,7 @@ def getPatchSize(imgShape, imgPatchSize):
   else:
     patchSize2 = imgShape[4]  
     
-  return (patchSize0, patchSize1, patchSize2)
+  return [patchSize0, patchSize1, patchSize2]
 
 def deformImage(imgToDef, defFields, device, detach=True):
   zeroDefField = getZeroDefField(imgToDef.shape)
@@ -97,6 +120,12 @@ def deformImage(imgToDef, defFields, device, detach=True):
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / (imgToDef.shape[4] / 2)
   deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
   return deformedTmp
+
+def getReceptiveFieldOffset(nuOfLayers):
+  receptiveFieldOffset = np.power(2,nuOfLayers)
+  for i in range(nuOfLayers-1,0,-1):
+    receptiveFieldOffset += 2*np.power(2,i)
+  return receptiveFieldOffset
 
 def loadImage(filename):
   tmp = sitk.ReadImage(str(filename))

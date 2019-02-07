@@ -22,13 +22,13 @@ class EncoderBrick(nn.Module):
 
 
   def forwardPad(self, x):
-    encoder = nn.functional.pad(x, self.padVals, 'replicate')
+    encoder = nn.functional.pad(x, self.padVals, "constant", 0)
     encoder = self.conv0(encoder)
     if (self.useBatchNorm):
       encoder = self.batch0(encoder)
     encoder = nn.functional.relu(encoder)
     
-    encoder = nn.functional.pad(encoder, self.padVals, 'replicate')
+    encoder = nn.functional.pad(encoder, self.padVals, "constant", 0)
     encoder = self.conv1(encoder)
     if (self.useBatchNorm):
       encoder = self.batch1(encoder)

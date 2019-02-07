@@ -1,6 +1,7 @@
 import torch
-from Utils import getMaxIdxs, getPatchSize, normalizeImg
+from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
 import numpy as np
+from Options import netDepth, netMinPatchSize, receptiveField
 
 class Sampler(object):
 
@@ -44,13 +45,19 @@ class Sampler(object):
     return (imgDataToWork, labelDataToWork)    
   
   def getSubSample(self, idx, normImgPatch):
-      imgPatch = self.imgData[:, :, idx[0]:idx[0] + self.patchSizes[0], idx[1]:idx[1] + self.patchSizes[1], idx[2]:idx[2] + self.patchSizes[2]]
-      labelData = torch.empty((1, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
+      imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
+      labelData = torch.empty((1, self.imgData.shape[1], idx[3], idx[4], idx[5]), requires_grad=False)
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
       if (self.labelData.dim() == self.imgData.dim()):
-        labelData = self.labelData[:, :, idx[0]:idx[0] + self.patchSizes[0], idx[1]:idx[1] + self.patchSizes[1], idx[2]:idx[2] + self.patchSizes[2]]
+        labelData = self.labelData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
       return (imgPatch, labelData)
+    
+  def getSubSampleImg(self, idx, normImgPatch):
+      imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
+      if normImgPatch:
+        imgPatch = normalizeImg(imgPatch)
+      return imgPatch    
     
   def getUniformlyDistributedSubsamples(self,numberofSamplesPerRun, idxs, currIteration, normImgPatch=False):
     
@@ -66,12 +73,12 @@ class Sampler(object):
     j = 0
     for i in iterationRange:
       idx = idxs[i]
-      imgPatch = self.imgData[:, :, idx[0]:idx[0] + self.patchSizes[0], idx[1]:idx[1] + self.patchSizes[1], idx[2]:idx[2] + self.patchSizes[2]]
+      imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
       imgDataNew[j, ] = imgPatch
       if (self.labelData.dim() == self.imgData.dim()):
-        labelDataNew[j, ] = self.labelData[:, :, idx[0]:idx[0] + self.patchSizes[0], idx[1]:idx[1] + self.patchSizes[1], idx[2]:idx[2] + self.patchSizes[2]]
+        labelDataNew[j, ] = self.labelData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
       j=j+1
       
     imgDataToWork = imgDataNew
@@ -90,28 +97,32 @@ class Sampler(object):
   
   def getIndicesForOneShotSampling(self, minusShift):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
-    return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=False)  
+    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=False, offset=minusShift[0]/2)  
   
-  def iterateImgMedian(self, startidx, shift):
+  def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
     for patchIdx0 in range(startidx[0], self.maxIdxs[0], shift[0]):
       for patchIdx1 in range(startidx[1], self.maxIdxs[1], shift[1]):
         for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
-          if (self.maskChanSum[:,patchIdx0:patchIdx0 + self.patchSizes[0], patchIdx1:patchIdx1 + self.patchSizes[1], patchIdx2:patchIdx2 + self.patchSizes[2]].median() > 0):
-            idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
+          if (self.maskChanSum[:,patchIdx0+offset:patchIdx0 + self.patchSizes[0] - offset,
+                                patchIdx1+offset:patchIdx1 + self.patchSizes[1] - offset,
+                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].median() > 0):
+            idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
     return idxs
 
-  def iterateImgSum(self, startidx, shift):
+  def iterateImgSum(self, startidx, shift, offset=0):
     idxs = []
     for patchIdx0 in range(startidx[0], self.maxIdxs[0], shift[0]):
       for patchIdx1 in range(startidx[1], self.maxIdxs[1], shift[1]):
         for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
-          if (self.maskChanSum[:,patchIdx0:patchIdx0 + self.patchSizes[0], patchIdx1:patchIdx1 + self.patchSizes[1], patchIdx2:patchIdx2 + self.patchSizes[2]].sum() > 0):
-            idxs.append( (patchIdx0, patchIdx1, patchIdx2) )
-    return idxs  
+          if (self.maskChanSum[:,patchIdx0+offset:patchIdx0 + self.patchSizes[0] - offset,
+                                patchIdx1+offset:patchIdx1 + self.patchSizes[1] - offset,
+                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].sum() > 0):
+            idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
+    return idxs 
             
-            
-  def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=True):
+ 
+  def getIndicesForUniformSamplingPathShiftNoOverlap(self, patchShift, useMedian=True, offset=0):
     imgShape = self.imgData.shape
 
     if useMedian:
@@ -119,23 +130,103 @@ class Sampler(object):
     else:
       iterateMethod = self.iterateImgSum
       
-    idxs = iterateMethod((0,0,0), patchShift)
+    idxs = iterateMethod((0,0,0), patchShift, offset)
        
     leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
-    startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) & (self.maxIdxs[0] > self.patchSizes[0])  else 0
-    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1] 
-    startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) & (self.maxIdxs[1] > self.patchSizes[1])  else 0
-    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2] 
-    startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) & (self.maxIdxs[2] > self.patchSizes[2])  else 0
+    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
+    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
     
-    if startidx0 > 0:
-      idxs = idxs + iterateMethod((startidx0, 0, 0), patchShift)
-    if startidx1 > 0:
-      idxs = idxs + iterateMethod((0, startidx1, 0), patchShift)
-    if startidx2 > 0:
-      idxs = idxs + iterateMethod((0, 0, startidx2), patchShift)
+    
+    if leftover0 > 0:
+      
+      self.patchSizes[0] = self.getNextPatchSize(leftover0)
+      self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+
+      startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
+      idxs = idxs + iterateMethod((startidx0, 0, 0), patchShift, offset)
+      if leftover1 > 0:
+        
+        self.patchSizes[1] = self.getNextPatchSize(leftover1)
+        self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes) 
+        
+        startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
+        idxs = idxs + iterateMethod((startidx0, startidx1, 0), patchShift, offset)
+        if leftover2 > 0:
+          
+          self.patchSizes[2] = self.getNextPatchSize(leftover2)
+          self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+          
+          startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
+          idxs = idxs + iterateMethod((startidx0, startidx1, startidx2), patchShift, offset)
+    if leftover1 > 0:
+      self.patchSizes[1] = self.getNextPatchSize(leftover1)
+      self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+       
+      startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
+      idxs = idxs + iterateMethod((0, startidx1, 0), patchShift, offset)
+      if leftover2 > 0:
+        self.patchSizes[2] = self.getNextPatchSize(leftover2)
+        self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+        
+        startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
+        idxs = idxs + iterateMethod((0, startidx1, startidx2), patchShift, offset)
+    if leftover2 > 0:
+      self.patchSizes[2] = self.getNextPatchSize(leftover2)
+      self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+      
+      startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
+      idxs = idxs + iterateMethod((0, 0, startidx2), patchShift, offset)
+      if leftover0 > 0:
+        self.patchSizes[0] = self.getNextPatchSize(leftover0)
+        self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
+        
+        startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
+        idxs = idxs + iterateMethod((startidx0, 0, startidx2), patchShift, offset)
       
     return idxs
+            
+  def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=True, offset=0):
+    imgShape = self.imgData.shape
+
+    if useMedian:
+      iterateMethod = self.iterateImgMedian
+    else:
+      iterateMethod = self.iterateImgSum
+      
+    idxs = iterateMethod((0,0,0), patchShift, offset)
+       
+    leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
+    startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
+    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1] 
+    startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
+    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2] 
+    startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
+    
+    if startidx0 > 0:
+      idxs = idxs + iterateMethod((startidx0, 0, 0), patchShift, offset)
+      if startidx1 > 0:
+        idxs = idxs + iterateMethod((startidx0, startidx1, 0), patchShift, offset)
+        if startidx2 > 0:
+          idxs = idxs + iterateMethod((startidx0, startidx1, startidx2), patchShift, offset)
+    if startidx1 > 0:
+      idxs = idxs + iterateMethod((0, startidx1, 0), patchShift, offset)
+      if startidx2 > 0:
+        idxs = idxs + iterateMethod((0, startidx1, startidx2), patchShift, offset)
+    if startidx2 > 0:
+      idxs = idxs + iterateMethod((0, 0, startidx2), patchShift, offset)
+      if startidx0 > 0:
+        idxs = idxs + iterateMethod((startidx0, 0, startidx2), patchShift, offset)
+      
+    return idxs
+  
+  def getNextPatchSize(self, leftover):
+    modValue = (netDepth -1) * 2
+    leftover = leftover + 2 + getReceptiveFieldOffset(netDepth)
+    minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
+    while minPatchSize % modValue != 0:
+      minPatchSize+=1
+    return minPatchSize
+    
     
   def getIndicesForUniformSampling(self):
     shift = (self.patchSizes[0] / 2,self.patchSizes[1] / 2,self.patchSizes[2] / 2)

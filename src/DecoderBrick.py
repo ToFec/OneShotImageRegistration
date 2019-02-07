@@ -33,14 +33,14 @@ class DecoderBrick(nn.Module):
     else:
       decoder = torch.add(decoder,encodeTensor)
     
-    decoder = nn.functional.pad(decoder, self.padVals, 'replicate')
+    decoder = nn.functional.pad(decoder, self.padVals, "constant", 0)
     decoder = self.conv0(decoder)
     if (self.useBatchNorm):
       decoder = self.batch0(decoder)
       
     decoder = nn.functional.relu(decoder)
     
-    decoder = nn.functional.pad(decoder, self.padVals, 'replicate')
+    decoder = nn.functional.pad(decoder, self.padVals, "constant", 0)
     decoder = self.conv1(decoder)
     if (self.useBatchNorm):
       decoder = self.batch1(decoder)
