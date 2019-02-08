@@ -136,7 +136,7 @@ class Sampler(object):
     leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
     leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
     
-    
+    oldPatchSize = list(self.patchSizes)
     if leftover0 > 0:
       
       self.patchSizes[0] = self.getNextPatchSize(leftover0)
@@ -158,6 +158,7 @@ class Sampler(object):
           
           startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
           idxs = idxs + iterateMethod((startidx0, startidx1, startidx2), patchShift, offset)
+    self.patchSizes = list(oldPatchSize)
     if leftover1 > 0:
       self.patchSizes[1] = self.getNextPatchSize(leftover1)
       self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
@@ -170,6 +171,7 @@ class Sampler(object):
         
         startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
         idxs = idxs + iterateMethod((0, startidx1, startidx2), patchShift, offset)
+    self.patchSizes = oldPatchSize
     if leftover2 > 0:
       self.patchSizes[2] = self.getNextPatchSize(leftover2)
       self.maxIdxs = getMaxIdxs(imgShape, self.patchSizes)
@@ -221,7 +223,7 @@ class Sampler(object):
   
   def getNextPatchSize(self, leftover):
     modValue = (netDepth -1) * 2
-    leftover = leftover + 2 + getReceptiveFieldOffset(netDepth)
+    leftover = leftover + 2*getReceptiveFieldOffset(netDepth)
     minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
     while minPatchSize % modValue != 0:
       minPatchSize+=1

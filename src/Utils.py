@@ -2,6 +2,7 @@ import numpy as np
 import SimpleITK as sitk
 import torch
 from GaussSmoothing import GaussianSmoothing
+import Context
 
 def deform(inputVol, x1, y1, z1):
   ##http://simpleitk.github.io/SimpleITK-Notebooks/01_Image_Basics.html
@@ -28,16 +29,19 @@ def getDefField(x1, y1, z1):
   return defField
 
 #deformation field for grid_sample function with zero deformation
-def getZeroDefField(imagShape):
-  m0=np.linspace(-1, 1, imagShape[2], dtype=np.float32)
-  m1=np.linspace(-1, 1, imagShape[3], dtype=np.float32)
-  m2=np.linspace(-1, 1, imagShape[4], dtype=np.float32)
-  grid0, grid1, grid2 = np.meshgrid(m0,m1,m2,indexing='ij')
-  defField = np.stack([grid2, grid1, grid0], axis=3)
-  defField = np.expand_dims(defField, axis=0)
-  defField = np.tile(defField, (imagShape[0],1,1,1,1))
-  defField = torch.from_numpy(defField)
-  return defField
+def getZeroDefField(imagShape, device):
+  if (Context.zeroDefField is None) or (imagShape[2:] != Context.zeroDefField.shape):
+    m0=np.linspace(-1, 1, imagShape[2], dtype=np.float32)
+    m1=np.linspace(-1, 1, imagShape[3], dtype=np.float32)
+    m2=np.linspace(-1, 1, imagShape[4], dtype=np.float32)
+    grid0, grid1, grid2 = np.meshgrid(m0,m1,m2,indexing='ij')
+    defField = np.stack([grid2, grid1, grid0], axis=3)
+    defField = np.expand_dims(defField, axis=0)
+    defField = np.tile(defField, (imagShape[0],1,1,1,1))
+    defField = torch.from_numpy(defField)
+    Context.zeroDefField = defField.to(device)
+    
+  return Context.zeroDefField
 
 def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
     smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)
@@ -107,8 +111,7 @@ def getPatchSize(imgShape, imgPatchSize):
   return [patchSize0, patchSize1, patchSize2]
 
 def deformImage(imgToDef, defFields, device, detach=True):
-  zeroDefField = getZeroDefField(imgToDef.shape)
-  zeroDefField = zeroDefField.to(device)  
+  zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
   if (detach):
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach() / (imgToDef.shape[2] / 2)

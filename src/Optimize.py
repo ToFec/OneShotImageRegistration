@@ -145,8 +145,7 @@ class Optimize():
     cropStart2 = (imgDataToWork.shape[4]-defFields.shape[4])/2
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+defFields.shape[2], cropStart1:cropStart1+defFields.shape[3], cropStart2:cropStart2+defFields.shape[4]]
     
-    zeroDefField = getZeroDefField(imgDataToWork.shape)
-    zeroDefField = zeroDefField.to(self.userOpts.device)
+#     zeroDefField = getZeroDefField(imgDataToWork.shape, self.userOpts.device)
     
     
     imgDataDef = torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)
@@ -188,28 +187,24 @@ class Optimize():
     optimizer.step()
     return loss
   
-  def terminateLoopByLoss(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
-    if (loss == runningLoss.mean()):
+  def terminateLoopByLoss(self, loss, meanLoss, currIteration, itThreshold, iterIdx):
+    if (meanLoss - loss < self.userOpts.lossTollerance):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByLossAndItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
-    if (np.isclose(loss, runningLoss.mean(),atol=self.userOpts.lossTollerance) or currIteration == itThreshold):
+  def terminateLoopByLossAndItCount(self, loss, meanLoss, currIteration, itThreshold, iterIdx):
+    if (meanLoss - loss < self.userOpts.lossTollerance) or (currIteration >= itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
-      print(currIteration)
-      print(itThreshold)
-      print(loss)
-      print(runningLoss)
       return True
     else:
       return False
     
   def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
-    if (currIteration == itThreshold):
+    if (currIteration >= itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
@@ -262,18 +257,19 @@ class Optimize():
           imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
           patchIteration=0
           lossCounter = 0
-          runningLoss = np.ones(10)
+          runningLoss = torch.ones(10, device=self.userOpts.device)
           while True:
             loss = self.optimizeNet(imgDataToWork, None, optimizer)
-            numpyLoss = loss.detach().cpu().numpy()
-            if (iterationValidation(numpyLoss, runningLoss, patchIteration, numberOfiterations, 0)):
-              break
-            
-            runningLoss[lossCounter] = numpyLoss
+            detachLoss = loss.detach()
+ 
+            runningLoss[lossCounter] = detachLoss
             if lossCounter == 9:
               meanLoss = runningLoss.mean()
-              self.logFile.write(str(meanLoss) + ';')
+              self.logFile.write(str(float(meanLoss)) + ';')
               lossCounter = 0
+              if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
+                break
+              
             else:
               lossCounter+=1
               
@@ -329,7 +325,7 @@ class Optimize():
       datasetIterationValidation = self.terminateLoopByItCount
       
     lossCounter = 0
-    runningLoss = np.ones(10)  
+    runningLoss = torch.ones(10,device=self.userOpts.device)  
     print('epochs: ', epochs)
     epochCount = 0
     while True: ##epoch loop
@@ -376,13 +372,13 @@ class Optimize():
               labelDataToWork = subSamples[1]
             loss = self.optimizeNet(imgDataToWork, labelDataToWork, optimizer)
             
-            numpyLoss = loss.detach().cpu().numpy()
-            if (datasetIterationValidation(numpyLoss, runningLoss, imgIteration, numberOfiterations, 0)):
-              break
-            runningLoss[lossCounter] = numpyLoss
+            detachLoss = loss.detach()
+            runningLoss[lossCounter] = detachLoss
             if lossCounter == 9:
               meanLoss = runningLoss.mean()
-              self.logFile.write(str(meanLoss) + ';')
+              if (datasetIterationValidation(detachLoss, meanLoss, imgIteration, numberOfiterations, 0)):
+                break
+              self.logFile.write(str(float(meanLoss)) + ';')
               lossCounter = 0
             else:
               lossCounter+=1
