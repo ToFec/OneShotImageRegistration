@@ -132,7 +132,7 @@ class Optimize():
     print(torch.cuda.memory_allocated())
   
    
-  def optimizeNet(self, imgDataToWork, labelToWork, optimizer):
+  def optimizeNet(self, imgDataToWork, labelToWork, optimizer, currDefFields):
     
     # zero the parameter gradients
     optimizer.zero_grad()
@@ -170,10 +170,10 @@ class Optimize():
 #     del zeroDefField, cycleIdxData
           
     crossCorr = lf.normCrossCorr(imgDataToWork, imgDataDef)
-#     if imgDataToWork.shape[1] > 3:
-#       smoothnessDF = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
-#     else:
-#       smoothnessDF = lf.smoothnessVecField(defFields, self.userOpts.device)
+    if imgDataToWork.shape[1] > 3:
+      smoothnessDF = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
+    else:
+      smoothnessDF = lf.smoothnessVecField(defFields, self.userOpts.device)
 #     
 #     cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
 #     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.cycleW * cycleLoss
@@ -248,7 +248,8 @@ class Optimize():
         
         imgData = imgData.to(self.userOpts.device)
         sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
-        idxs = sampler.getIndicesForOneShotSampling(samplerShift)
+        #idxs = sampler.getIndicesForOneShotSampling(samplerShift)
+        idxs = sampler.getIndicesForUniformSampling()
         patchIdx=0
         print('patches: ', idxs)
         for idx in idxs:
@@ -282,11 +283,21 @@ class Optimize():
             startImgIdx1 = idx[1]
             startImgIdx2 = idx[2]
             defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
+            
+#             tmpCheckDefField = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+#             tmpCheckDefField[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
+#             defX = tmpCheckDefField[0, 0, ].detach()
+#             defY = tmpCheckDefField[0, 1, ].detach()
+#             defZ = tmpCheckDefField[0, 2, ].detach()
+#             defField = getDefField(defX, defY, defZ)
+#             saveImg(defField, self.userOpts.outputPath + os.path.sep + 'tmpCheckDefField' + str(patchIdx) + '.nrrd', isVector=True)
+            
             indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += 1
           
           patchIdx+=1
           
-        imgData = imgData[:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
+        if not self.userOpts.usePaddedNet:
+          imgData = imgData[:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
         saveImg(indexArray, self.userOpts.outputPath + os.path.sep + 'indexArray.nrrd')
         indexArray[indexArray < 1] = 1
@@ -295,7 +306,6 @@ class Optimize():
           for dim1 in range(0, defFields.shape[1]):
             defFieldsTmp = defFields[dim0, dim1, ] / indexArray
             defFields[dim0, dim1, ] = defFieldsTmp
-#             defFields[dim0, dim1, ] = smoothArray3D(defFieldsTmp, self.userOpts.device)
   
         del indexArray
         
