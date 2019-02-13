@@ -32,22 +32,117 @@ def cycleLoss(vecFields, device):
     loss[imgIdx] = torch.mean(dir0Sum + dir1Sum + dir2Sum)
   return loss.sum() / vecFields.shape[0]
   
+def smoothnessVecFieldPatchNeighbors(vecFields, currDefFields, device):
+  loss = torch.empty(vecFields.shape[0], device=device)
+  for imgIdx in range(vecFields.shape[0]):
+    vecField = vecFields[imgIdx]
+    currDefField = currDefFields[imgIdx]
+    
+    idx = np.arange(0,vecField.shape[1])
+    t = currDefField[:,idx,1:-1,1:-1]
+    loss10 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,idx,1:-1,1:-1]
+    loss11 = torch.abs(t - vecField)
+    loss1 = loss10 + loss11
+    
+    idx = np.arange(0,vecField.shape[2])
+    t = currDefField[:,1:-1,idx,1:-1]
+    loss20 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,1:-1,idx,1:-1]
+    loss21 = torch.abs(t - vecField)
+    loss2 = loss20 + loss21
+    
+    idx = np.arange(0,vecField.shape[3])
+    t = currDefField[:,1:-1,1:-1,idx]
+    loss30 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,1:-1,1:-1,idx]
+    loss31 = torch.abs(t - vecField)
+    loss3 = loss30 + loss31
+    
+    loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+  return loss.sum() / vecFields.shape[0]
+
+def smoothnessVecFieldPatchNeighborsT(vecFields, currDefFields, device):
+  loss = torch.empty(vecFields.shape[0], device=device)
+  for imgIdx in range(vecFields.shape[0]):
+    vecField = vecFields[imgIdx]
+    currDefField = currDefFields[imgIdx]
+
+    idx = np.roll(range(0,vecField.shape[0]),-3)
+    t = vecField[idx,:,:,:].detach()
+    loss0 = torch.abs(t - vecField)
+    
+    idx = np.arange(0,vecField.shape[1])
+    t = currDefField[:,idx,1:-1,1:-1]
+    loss10 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,idx,1:-1,1:-1]
+    loss11 = torch.abs(t - vecField)
+    loss1 = loss10 + loss11
+    
+    idx = np.arange(0,vecField.shape[2])
+    t = currDefField[:,1:-1,idx,1:-1]
+    loss20 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,1:-1,idx,1:-1]
+    loss21 = torch.abs(t - vecField)
+    loss2 = loss20 + loss21
+    
+    idx = np.arange(0,vecField.shape[3])
+    t = currDefField[:,1:-1,1:-1,idx]
+    loss30 = torch.abs(t - vecField)
+    
+    idx = idx+2
+    t = currDefField[:,1:-1,1:-1,idx]
+    loss31 = torch.abs(t - vecField)
+    loss3 = loss30 + loss31
+    
+    loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+  return loss.sum() / vecFields.shape[0]
+ 
+  
 def smoothnessVecField(vecFields, device):
   loss = torch.empty(vecFields.shape[0], device=device)
   for imgIdx in range(vecFields.shape[0]):
     vecField = vecFields[imgIdx]
-
-    idx = np.roll(range(0,vecField.shape[1]),-1)
+    
+    idx = np.arange(0,vecField.shape[1]-1)
+    t = vecField[:,idx+1,:,:].detach()
+    loss10 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss10[:,idx,:,:] = torch.abs(t - vecField[:,idx,:,:])
+    
     t = vecField[:,idx,:,:].detach()
-    loss1 = torch.abs(t - vecField)
+    loss11 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss11[:,idx+1,:,:] = torch.abs(t - vecField[:,idx+1,:,:])
+    loss1 = loss10 + loss11
     
-    idx = np.roll(range(0,vecField.shape[2]),-1)
+    idx = np.arange(0,vecField.shape[2]-1)
+    t = vecField[:,:,idx+1,:].detach()
+    loss20 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss20[:,:,idx,:] = torch.abs(t - vecField[:,:,idx,:])
+    
     t = vecField[:,:,idx,:].detach()
-    loss2 = torch.abs(t - vecField)
+    loss21 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss21[:,:,idx+1,:] = torch.abs(t - vecField[:,:,idx+1,:])
+    loss2 = loss20 + loss21
     
-    idx = np.roll(range(0,vecField.shape[3]),-1)
+    idx = np.arange(0,vecField.shape[3]-1)
+    t = vecField[:,:,:,idx+1].detach()
+    loss30 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss30[:,:,:,idx] = torch.abs(t - vecField[:,:,:,idx])
+    
     t = vecField[:,:,:,idx].detach()
-    loss3 = torch.abs(t - vecField)
+    loss31 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss31[:,:,:,idx+1] = torch.abs(t - vecField[:,:,:,idx+1])
+    loss3 = loss30 + loss31
     
     loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
   return loss.sum() / vecFields.shape[0]
@@ -61,17 +156,35 @@ def smoothnessVecFieldT(vecFields, device):
     t = vecField[idx,:,:,:].detach()
     loss0 = torch.abs(t - vecField)
     
-    idx = np.roll(range(0,vecField.shape[1]),-1)
+    idx = np.arange(0,vecField.shape[1]-1)
+    t = vecField[:,idx+1,:,:].detach()
+    loss10 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss10[:,idx,:,:] = torch.abs(t - vecField[:,idx,:,:])
+    
     t = vecField[:,idx,:,:].detach()
-    loss1 = torch.abs(t - vecField)
+    loss11 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss11[:,idx+1,:,:] = torch.abs(t - vecField[:,idx+1,:,:])
+    loss1 = loss10 + loss11
     
-    idx = np.roll(range(0,vecField.shape[2]),-1)
+    idx = np.arange(0,vecField.shape[2]-1)
+    t = vecField[:,:,idx+1,:].detach()
+    loss20 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss20[:,:,idx,:] = torch.abs(t - vecField[:,:,idx,:])
+    
     t = vecField[:,:,idx,:].detach()
-    loss2 = torch.abs(t - vecField)
+    loss21 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss21[:,:,idx+1,:] = torch.abs(t - vecField[:,:,idx+1,:])
+    loss2 = loss20 + loss21
     
-    idx = np.roll(range(0,vecField.shape[3]),-1)
+    idx = np.arange(0,vecField.shape[3]-1)
+    t = vecField[:,:,:,idx+1].detach()
+    loss30 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss30[:,:,:,idx] = torch.abs(t - vecField[:,:,:,idx])
+    
     t = vecField[:,:,:,idx].detach()
-    loss3 = torch.abs(t - vecField)
+    loss31 = torch.zeros(vecField.shape, device=device, requires_grad=False)
+    loss31[:,:,:,idx+1] = torch.abs(t - vecField[:,:,:,idx+1])
+    loss3 = loss30 + loss31
     
     loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
   return loss.sum() / vecFields.shape[0]
