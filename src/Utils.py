@@ -3,6 +3,7 @@ import SimpleITK as sitk
 import torch
 from GaussSmoothing import GaussianSmoothing
 import Context
+import pickle
 
 def deform(inputVol, x1, y1, z1):
   ##http://simpleitk.github.io/SimpleITK-Notebooks/01_Image_Basics.html
@@ -150,5 +151,9 @@ def normalizeImg(img):
   return imgData
     
 def compareDicts(dict1, dict2):
-  shared_items = {k: dict1[k] for k in dict1 if k in dict2 and dict1[k] == dict2[k]}
-  return len(shared_items)    
+  shared_items = {k: dict1[k] for k in dict1 if k in dict2 and bool(torch.all(dict1[k] == dict2[k]))}
+  return len(shared_items)  
+
+def printHash(obj):
+  h=pickle.dumps(obj)
+  print hash(h)  

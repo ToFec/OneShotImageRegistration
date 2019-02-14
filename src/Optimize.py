@@ -2,6 +2,7 @@ import torch
 import torch.optim as optim
 
 import numpy as np
+import copy
 from Utils import getDefField, getZeroDefField, smoothArray3D, getPatchSize, deformImage, saveImg, getReceptiveFieldOffset, compareDicts
 import SimpleITK as sitk
 
@@ -192,7 +193,7 @@ class Optimize():
 #     cycleLoss = lf.cycleLoss(cycleImgData, self.userOpts.device)
 #     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.cycleW * cycleLoss
     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF
-#     print('cc: %.5f ' % (crossCorr))
+#     print('cc: %.5f smmothness: %.5f' % (crossCorr, smoothnessDF))
     #print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
 #     print('loss: %.3f' % (loss))
@@ -277,32 +278,28 @@ class Optimize():
             print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
             if netStateDicts[patchIdx] is not None:
               stateDict = netStateDicts[patchIdx]
-              if (patchIdx == 1):
-                print(len(netStateDicts[0]))
-                print(compareDicts(netStateDicts[0], netStateDicts[1]))
-                
-                print(len(optimizerStateDicts[0]))
-                print(compareDicts(optimizerStateDicts[0], optimizerStateDicts[1]))
               optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
               self.net.load_state_dict(stateDict)
+              
             self.net.train()
             imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
             patchIteration=0
             lossCounter = 0
             runningLoss = torch.ones(10, device=self.userOpts.device)
             while True:
-              loss = self.optimizeNet(imgDataToWork, None, optimizer)
-#               loss = self.optimizeNet(imgDataToWork, None, optimizer, defFields, idx)
+#               loss = self.optimizeNet(imgDataToWork, None, optimizer)
+              loss = self.optimizeNet(imgDataToWork, None, optimizer, defFields, idx)
               detachLoss = loss.detach()
    
               runningLoss[lossCounter] = detachLoss
               if lossCounter == 9:
                 meanLoss = runningLoss.mean()
-                self.logFile.write(str(float(meanLoss)) + ';')
+                self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
+                self.logFile.write('\n')
                 lossCounter = 0
                 if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
-                  netStateDicts[patchIdx] = dict(self.net.state_dict())
-                  optimizerStateDicts[patchIdx] = optimizer.state_dict()
+                  netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
+                  optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
                   cumLoss += meanLoss
                   break
                 
@@ -320,7 +317,7 @@ class Optimize():
               defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = tmpField
 #               defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
               
-              indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += 1
+              indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = patchIdx
             
             patchIdx+=1
             

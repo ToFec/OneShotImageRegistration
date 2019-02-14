@@ -1,4 +1,7 @@
 import matplotlib.pyplot as plt
+import sys, getopt
+
+import pandas as pd
 
 def plotDataset(dataset):
   nuOfimg=len(dataset)
@@ -32,3 +35,29 @@ def plotImageData(imageData, blockFig=False):
         slice = int(sample.shape[2] / 2)
         plt.imshow(sample[:,:,slice],cmap='gray')
   plt.show(block=blockFig)
+  
+  
+  
+def main(argv):
+  
+  try:
+    opts, args = getopt.getopt(argv, '', ['csvFile='])
+  except getopt.GetoptError, e:
+    print(e)
+    return
+    
+  for opt, arg in opts:
+    if opt == '--csvFile':
+      csvFile = arg
+
+  df = pd.read_csv(csvFile, sep=';', header=None)
+  
+  plt.scatter(range(0,len(df[0])),df[0], c=df[1])
+  plt.plot(range(0,len(df[0])),df[0])
+  plt.grid()
+  plt.show()
+
+  
+  
+if __name__ == "__main__":
+  main(sys.argv[1:])   
