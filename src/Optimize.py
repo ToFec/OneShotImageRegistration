@@ -240,86 +240,102 @@ class Optimize():
 
     for i, data in enumerate(dataloader, 0):
         # get the inputs
-        imgData = data['image']
-        labelData = data['label']
-        maskData = data['mask']
-        landmarkData = data['landmarks']
+        imgDataOrig = data['image']
+        labelDataOrig = data['label']
+        maskDataOrig = data['mask']
+        landmarkDataOrig = data['landmarks']
         
-        defFields = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
-        indexArray = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+        samplingRates = (0.25,0.5,1)
+        defFields = None
+        for samplingRate in samplingRates:
+          if samplingRate < 1:
+            imgData = torch.nn.functional.interpolate(imgDataOrig,scale_factor=samplingRate,mode='trilinear')
+            maskData = torch.nn.functional.interpolate(maskDataOrig, scale_factor=samplingRate, mode='nearest')
+            labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
+          else:
+            imgData = imgDataOrig
+            maskData = maskDataOrig
+            labelData = labelDataOrig
         
-        samplerShift = (0,0,0)
-        if not self.userOpts.usePaddedNet:
-          padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
-          imgData = torch.nn.functional.pad(imgData, padVals, "constant", 0)
-          if (maskData.dim() == imgData.dim()):
-            maskData = maskData.float()
-            maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
-            maskData = maskData.byte()
-          if (labelData.dim() == imgData.dim()):
-            labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
+          if defFields is None:
+            defFields = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+          indexArray = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
           
-          samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
-        
-        imgData = imgData.to(self.userOpts.device)
-        sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
-        idxs = sampler.getIndicesForOneShotSampling(samplerShift)
-#         idxs = sampler.getIndicesForUniformSampling()
-        
-        netStateDicts = [None for tmp in idxs]
-        optimizerStateDicts = [None for tmp in idxs]
-        print('patches: ', idxs)
-        imgSetIeration = 0
-        oldLoss = 100.0
-        while True:
-          patchIdx=0
-          cumLoss = 0.0
-          for idx in idxs:
-            print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-            if netStateDicts[patchIdx] is not None:
-              stateDict = netStateDicts[patchIdx]
-              optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
-              self.net.load_state_dict(stateDict)
-              
-            self.net.train()
-            imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-            patchIteration=0
-            lossCounter = 0
-            runningLoss = torch.ones(10, device=self.userOpts.device)
-            while True:
-#               loss = self.optimizeNet(imgDataToWork, None, optimizer)
-              loss = self.optimizeNet(imgDataToWork, None, optimizer, defFields, idx)
-              detachLoss = loss.detach()
-   
-              runningLoss[lossCounter] = detachLoss
-              if lossCounter == 9:
-                meanLoss = runningLoss.mean()
-                self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
-                self.logFile.write('\n')
-                lossCounter = 0
-                if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
-                  netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
-                  optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
-                  cumLoss += meanLoss
-                  break
-                
-              else:
-                lossCounter+=1
-                
-              patchIteration+=1
+          samplerShift = (0,0,0)
+          if not self.userOpts.usePaddedNet:
+            padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
+            imgData = torch.nn.functional.pad(imgData, padVals, "constant", 0)
+            if (maskData.dim() == imgData.dim()):
+              maskData = maskData.float()
+              maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
+              maskData = maskData.byte()
+            if (labelData.dim() == imgData.dim()):
+              labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
             
-            with torch.no_grad():
-              self.net.eval()
-              tmpField = self.net(imgDataToWork)
-              startImgIdx0 = idx[0]
-              startImgIdx1 = idx[1]
-              startImgIdx2 = idx[2]
-              defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = tmpField
-#               defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
+            samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
+          
+          imgData = imgData.to(self.userOpts.device)
+          sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift)
+  #         idxs = sampler.getIndicesForUniformSampling()
+          
+          netStateDicts = [None for tmp in idxs]
+          optimizerStateDicts = [None for tmp in idxs]
+          print('patches: ', idxs)
+          imgSetIeration = 0
+          oldLoss = 100.0
+          while True:
+            patchIdx=0
+            cumLoss = 0.0
+            for idx in idxs:
+              print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+              if netStateDicts[patchIdx] is not None:
+                stateDict = netStateDicts[patchIdx]
+                optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
+                self.net.load_state_dict(stateDict)
+                
+              self.net.train()
+              imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+              patchIteration=0
+              lossCounter = 0
+              runningLoss = torch.ones(10, device=self.userOpts.device)
+              while True:
+  #               loss = self.optimizeNet(imgDataToWork, None, optimizer)
+                loss = self.optimizeNet(imgDataToWork, None, optimizer, defFields, idx)
+                detachLoss = loss.detach()
+     
+                runningLoss[lossCounter] = detachLoss
+                if lossCounter == 9:
+                  meanLoss = runningLoss.mean()
+                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
+                  self.logFile.write('\n')
+                  lossCounter = 0
+                  if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
+                    netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
+                    optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
+                    cumLoss += meanLoss
+                    break
+                  
+                else:
+                  lossCounter+=1
+                  
+                patchIteration+=1
               
-              indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = patchIdx
-            
-            patchIdx+=1
+              with torch.no_grad():
+                self.net.eval()
+                tmpField = self.net(imgDataToWork)
+                startImgIdx0 = idx[0]
+                startImgIdx1 = idx[1]
+                startImgIdx2 = idx[2]
+                defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = tmpField
+  #               defFields[:, :, startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] += tmpField
+                
+                indexArray[startImgIdx0:startImgIdx0+tmpField.shape[2], startImgIdx1:startImgIdx1+tmpField.shape[3], startImgIdx2:startImgIdx2+tmpField.shape[4]] = patchIdx
+              
+              patchIdx+=1
+             
+          if samplingRate < 1:
+            defFields = torch.nn.functional.interpolate(defFields,scale_factor=1.0/samplingRate,mode='trilinear')
             
           defX = defFields[0, 0, ]
           defY = defFields[0, 1, ]
