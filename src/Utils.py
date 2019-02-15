@@ -115,13 +115,14 @@ def deformImage(imgToDef, defFields, device, detach=True):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
   if (detach):
-    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach() / (imgToDef.shape[2] / 2)
-    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach() / (imgToDef.shape[3] / 2)
-    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach() / (imgToDef.shape[4] / 2)
+    ## our image are of the form z,y,x; grid_sample takes as input the order x,y,z
+    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ].detach() / ((imgToDef.shape[4]-1) / 2.0)
+    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ].detach() / ((imgToDef.shape[3]-1) / 2.0)
+    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ].detach() / ((imgToDef.shape[2]-1) / 2.0)
   else:
-    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / (imgToDef.shape[2] / 2)
-    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / (imgToDef.shape[3] / 2)
-    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / (imgToDef.shape[4] / 2)
+    currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
+    currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
+    currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
   deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
   return deformedTmp
 
