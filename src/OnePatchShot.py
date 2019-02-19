@@ -51,7 +51,7 @@ def main(argv):
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
+  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
   with Optimize(net, userOpts) as trainTestOptimize:
     print(net)
     if not os.path.isdir(userOpts.outputPath):
@@ -62,14 +62,14 @@ def main(argv):
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        p = mp.Process(target=trainTestOptimize.trainTestNet, args=(net, dataloader, userOpts))
+        p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(net, dataloader, userOpts))
         p.start()
         processes.append(p)
       for p in processes:
         p.join()
           
     else:
-      trainTestOptimize.trainTestNet(dataloader)
+      trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
     end = time.time()
     print('Registration took:', end - start, 'seconds')
     

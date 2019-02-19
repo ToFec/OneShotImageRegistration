@@ -154,7 +154,7 @@ class PointProcessor():
       pointFileName = filepath + os.path.sep + str(i) + '0.pts'
       if (os.path.isfile(pointFileName)):
         points = pr.loadData(pointFileName)
-        pr.saveDataFcsv(filepath + os.path.sep + str(i) + '0.fcsv', points)
+        pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '0.fcsv', points)
       else:
         break
       i=i+1  

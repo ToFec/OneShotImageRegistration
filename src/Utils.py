@@ -157,4 +157,48 @@ def compareDicts(dict1, dict2):
 
 def printHash(obj):
   h=pickle.dumps(obj)
-  print hash(h)  
+  print hash(h)
+  
+def sampleImgData(data, samplingRate):
+    imgDataOrig = data['image']
+    labelDataOrig = data['label']
+    maskDataOrig = data['mask']
+    landmarkData = data['landmarks']
+    if samplingRate < 1:
+      imgData = torch.nn.functional.interpolate(imgDataOrig,scale_factor=samplingRate,mode='trilinear')
+      if (maskDataOrig.dim() == imgDataOrig.dim()):
+        maskDataOrig = maskDataOrig.float()
+        maskData = torch.nn.functional.interpolate(maskDataOrig, scale_factor=samplingRate, mode='nearest')
+        maskData = maskData.byte()
+      else:
+        maskData = maskDataOrig
+      if (labelDataOrig.dim() == imgDataOrig.dim()):
+        labelDataOrig = labelDataOrig.float()
+        labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
+        labelData = labelData.byte()
+      else:
+        labelData = labelDataOrig
+    else:
+      imgData = imgDataOrig
+      maskData = maskDataOrig
+      labelData = labelDataOrig
+    
+    return (imgData, maskData, labelData, landmarkData)
+  
+def sampleImg(img, samplingRate):
+  if samplingRate < 1:
+    img = torch.nn.functional.interpolate(img,scale_factor=samplingRate,mode='trilinear')
+  return img
+  
+def getPaddedData(imgData, maskData, labelData, padVals):
+  imgData = torch.nn.functional.pad(imgData, padVals, "constant", 0)
+  if (maskData.dim() == imgData.dim()):
+    maskData = maskData.float()
+    maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
+    maskData = maskData.byte()
+  if (labelData.dim() == imgData.dim()):
+    labelData = labelData.float()
+    labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
+    labelData = labelData.byte()
+    
+  return (imgData, maskData, labelData)

@@ -6,6 +6,7 @@ import torch
 import numpy as np
 import Utils
 from eval.LandmarkHandler import PointReader
+import Options
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -120,7 +121,11 @@ class HeadAndNeckDataset(Dataset):
         self.origins[idx] = origin
         
       imgData = np.stack(imgData).astype('float32')
-      imgData = imgData[:,:(imgData.shape[1]/2)*2,:(imgData.shape[2]/2)*2,:(imgData.shape[3]/2)*2]
+      
+      nuOfDownSampleLayers = Options.netDepth - 1
+      nuOfDownSampleSteps = len(Options.downSampleRates) -1
+      timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
+      imgData = imgData[:,:(imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
       
       maskData = []
@@ -132,7 +137,7 @@ class HeadAndNeckDataset(Dataset):
         maskData = np.stack(maskData)
         
 #make dimensions even; otehrwise there are probs with average pooling and upsampling         
-        maskData = maskData[:,:(maskData.shape[1]/2)*2,:(maskData.shape[2]/2)*2,:(maskData.shape[3]/2)*2]
+        maskData = maskData[:,:(maskData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
         
         imgMean = imgData[maskData > 0].mean()
         imgData = imgData - imgMean
@@ -154,7 +159,7 @@ class HeadAndNeckDataset(Dataset):
           labelsNii = sitk.GetArrayFromImage(tmp)
           labelData.append(labelsNii)
         labelData = np.stack(labelData)
-        labelData = labelData[:,:(labelData.shape[1]/2)*2,:(labelData.shape[2]/2)*2,:(labelData.shape[3]/2)*2]
+        labelData = labelData[:,:(labelData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(labelData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(labelData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
       landmarkData = []
       if (len(trainingFileNames) == len(landMarkFileNames)):

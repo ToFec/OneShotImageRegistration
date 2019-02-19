@@ -40,29 +40,29 @@ def smoothnessVecFieldPatchNeighbors(vecFields, currDefFields, device):
     
     idx = np.arange(0,vecField.shape[1])
     t = currDefField[:,idx,1:-1,1:-1]
-    loss10 = torch.abs(t - vecField)
+    loss10 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     
     idx = idx+2
     t = currDefField[:,idx,1:-1,1:-1]
-    loss11 = torch.abs(t - vecField)
+    loss11 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     loss1 = loss10 + loss11
     
     idx = np.arange(0,vecField.shape[2])
     t = currDefField[:,1:-1,idx,1:-1]
-    loss20 = torch.abs(t - vecField)
+    loss20 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     
     idx = idx+2
     t = currDefField[:,1:-1,idx,1:-1]
-    loss21 = torch.abs(t - vecField)
+    loss21 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     loss2 = loss20 + loss21
     
     idx = np.arange(0,vecField.shape[3])
     t = currDefField[:,1:-1,1:-1,idx]
-    loss30 = torch.abs(t - vecField)
+    loss30 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     
     idx = idx+2
     t = currDefField[:,1:-1,1:-1,idx]
-    loss31 = torch.abs(t - vecField)
+    loss31 = torch.abs(t[:,3:-3,3:-3,3:-3] - vecField[:,3:-3,3:-3,3:-3])
     loss3 = loss30 + loss31
     
     loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
@@ -104,6 +104,7 @@ def smoothnessVecFieldPatchNeighborsT(vecFields, currDefFields, device):
     t = currDefField[:,1:-1,1:-1,idx]
     loss31 = torch.abs(t - vecField)
     loss3 = loss30 + loss31
+    
     
     loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
   return loss.sum() / vecFields.shape[0]
