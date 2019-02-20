@@ -132,28 +132,13 @@ class Optimize():
     torch.cuda.synchronize()
     print(torch.cuda.memory_allocated())
   
-  def getVolumeForSmoothnessCalc(self, defFields, currDefFields, idx):
-    detachedFiels = defFields.detach()
-    padVals = torch.Size([1,1,1,1,1,1])
-    detachedFiels = torch.nn.functional.pad(detachedFiels, padVals, "replicate")
-    currDefFields = torch.nn.functional.pad(currDefFields, padVals, "constant", 0)
-    currDefFields = currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2]+2, idx[1]:idx[1]+defFields.shape[3]+2, idx[2]:idx[2]+defFields.shape[4]+2]
-    currDefFields[:, :, idx[0]+1:idx[0]+defFields.shape[2], idx[1]+1:idx[1]+defFields.shape[3], idx[2]+1:idx[2]+defFields.shape[4]] = detachedFiels[:, :, idx[0]+1:idx[0]+defFields.shape[2], idx[1]+1:idx[1]+defFields.shape[3], idx[2]+1:idx[2]+defFields.shape[4]]
-    currDefFields[currDefFields==0] = detachedFiels[currDefFields==0]
-    return currDefFields
-   
   def optimizeBoundaryRegion(self, imgDataToWork, optimizer, currDefFields, idx):
     optimizer.zero_grad()
     defFields = self.net(imgDataToWork)
-    currDefFields = self.getVolumeForSmoothnessCalc(defFields, currDefFields, idx)
-    if imgDataToWork.shape[1] > 3:
-      smoothnessDF = lf.smoothnessVecFieldPatchNeighborsT(defFields, currDefFields, self.userOpts.device)
-    else:
-      smoothnessDF = lf.smoothnessVecFieldPatchNeighbors(defFields, currDefFields, self.userOpts.device)
-      
-    smoothnessDF.backward()
+    boundaryLoss = lf.smoothBoundary(defFields, currDefFields, idx, self.userOpts.device)
+    boundaryLoss.backward()
     optimizer.step()
-    return smoothnessDF
+    return boundaryLoss
   
   def optimizeNet(self, imgDataToWork, labelToWork, optimizer, currDefFields = None, idx=None):
     
@@ -162,17 +147,16 @@ class Optimize():
         
     defFields = self.net(imgDataToWork)
     
+    boundaryLoss = 0.0
     if (currDefFields is not None) and (idx is not None):
-      currDefFields = self.getVolumeForSmoothnessCalc(defFields, currDefFields, idx)
-      if imgDataToWork.shape[1] > 3:
-        smoothnessDF = lf.smoothnessVecFieldPatchNeighborsT(defFields, currDefFields, self.userOpts.device)
-      else:
-        smoothnessDF = lf.smoothnessVecFieldPatchNeighbors(defFields, currDefFields, self.userOpts.device)
+      boundaryLoss = lf.smoothBoundary(defFields, currDefFields, idx, self.userOpts.device)
+      
+    if imgDataToWork.shape[1] > 3:
+      smoothnessLoss = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
     else:
-      if imgDataToWork.shape[1] > 3:
-        smoothnessDF = lf.smoothnessVecFieldT(defFields, self.userOpts.device)
-      else:
-        smoothnessDF = lf.smoothnessVecField(defFields, self.userOpts.device)
+      smoothnessLoss = lf.smoothnessVecField(defFields, self.userOpts.device)
+    
+    smoothnessDF = smoothnessLoss + boundaryLoss*10
     
     cropStart0 = (imgDataToWork.shape[2]-defFields.shape[2])/2
     cropStart1 = (imgDataToWork.shape[3]-defFields.shape[3])/2
@@ -216,25 +200,25 @@ class Optimize():
       
     loss.backward()
     optimizer.step()
-    return loss
+    return loss, defFields.detach()
   
-  def terminateLoopByLoss(self, loss, meanLoss, currIteration, itThreshold, iterIdx):
-    if (meanLoss - loss < self.userOpts.lossTollerance):
+  def terminateLoopByLoss(self, loss, meanLoss, currIteration, itThreshold, iterIdx, tollerance):
+    if (meanLoss - loss < tollerance):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByLossAndItCount(self, loss, meanLoss, currIteration, itThreshold, iterIdx):
-    if (meanLoss - loss < self.userOpts.lossTollerance) or (currIteration >= itThreshold):
+  def terminateLoopByLossAndItCount(self, loss, meanLoss, currIteration, itThreshold, iterIdx, tollerance):
+    if (meanLoss - loss < tollerance) or (currIteration >= itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
     else:
       return False
     
-  def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx):
+  def terminateLoopByItCount(self, loss, runningLoss, currIteration, itThreshold, iterIdx, tollerance):
     if (currIteration >= itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
@@ -391,7 +375,7 @@ class Optimize():
         labelData = data['label']
         maskData = data['mask']
         landmarkData = data['landmarks']
-        
+        firstIteration = True
         samplerShift = (0,0,0)
         if not self.userOpts.usePaddedNet:
           padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
@@ -402,61 +386,64 @@ class Optimize():
         sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
         idxs = sampler.getIndicesForOneShotSampling(samplerShift)
         print('idxs: ', idxs)
-        defFields = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
         netStateDicts = [None for _ in idxs]
         optimizerStateDicts = [None for _ in idxs]
-        
+        currDefField = None
         samplingRates = self.userOpts.downSampleRates
-        for samplingRate in samplingRates:
+        for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
-          currDefField = sampleImg(defFields, samplingRate)
-
-          for patchIdx, idx in enumerate(idxs):
-            print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-            if netStateDicts[patchIdx] is not None:
-              stateDict = netStateDicts[patchIdx]
-              optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
-              self.net.load_state_dict(stateDict)
+          if currDefField is None:
+            currDefField = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, int(imgData.shape[2]*samplingRate), int(imgData.shape[3]*samplingRate), int(imgData.shape[4]*samplingRate)), device=self.userOpts.device, requires_grad=False)
+          
+          for ltIdx, lossTollerance in enumerate(self.userOpts.lossTollerances):
+            print('lossTollerance: ', lossTollerance)
+            for patchIdx, idx in enumerate(idxs):
+              print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+              if netStateDicts[patchIdx] is not None:
+                stateDict = netStateDicts[patchIdx]
+                optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
+                self.net.load_state_dict(stateDict)
+                
+              self.net.train()
+              imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+              imgDataToWork = sampleImg(imgDataToWork, samplingRate)
+              sampledIdx = [int(tmp*samplingRate) for tmp in idx]
               
-            self.net.train()
-            imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-            imgDataToWork = sampleImg(imgDataToWork, samplingRate)
-            sampledIdx = [int(tmp*samplingRate) for tmp in idx]
-            
-            patchIteration=0
-            lossCounter = 0
-            runningLoss = torch.ones(10, device=self.userOpts.device)
-            while True:
-              if lossCounter == 10:
-#                 _ = self.optimizeBoundaryRegion(imgDataToWork, optimizer, currDefField, sampledIdx)
-                lossCounter = 0
-              else:
-                loss = self.optimizeNet(imgDataToWork, None, optimizer)
+              patchIteration=0
+              lossCounter = 0
+              runningLoss = torch.ones(10, device=self.userOpts.device)
+              while True:
+                if not firstIteration:
+                  loss, tmpField = self.optimizeNet(imgDataToWork, None, optimizer,currDefField, sampledIdx)
+                else:
+                  loss, tmpField = self.optimizeNet(imgDataToWork, None, optimizer)
+                currDefField[:, :, sampledIdx[0]:sampledIdx[0]+tmpField.shape[2], sampledIdx[1]:sampledIdx[1]+tmpField.shape[3], sampledIdx[2]:sampledIdx[2]+tmpField.shape[4]] = tmpField
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
                   meanLoss = runningLoss.mean()
                   self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
                   self.logFile.write('\n')
-                  if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
+                  lossCounter = 0
+                  if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
                     netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
                     optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
                     break
-                lossCounter+=1
+                else:
+                  lossCounter+=1
                 patchIteration+=1
             
-            with torch.no_grad():
-              self.net.eval()
-              tmpField = self.net(imgDataToWork)
-              currDefField[:, :, sampledIdx[0]:sampledIdx[0]+tmpField.shape[2], sampledIdx[1]:sampledIdx[1]+tmpField.shape[3], sampledIdx[2]:sampledIdx[2]+tmpField.shape[4]] = tmpField
-              upSampledTmpField = sampleImg(tmpField, 1.0/samplingRate)
-              defFields[:, :, idx[0]:idx[0]+upSampledTmpField.shape[2], idx[1]:idx[1]+upSampledTmpField.shape[3], idx[2]:idx[2]+upSampledTmpField.shape[4]] = upSampledTmpField
-              
+            firstIteration = False  
+          with torch.no_grad():
+            if samplingRate < 1:
+              upSampleRate = samplingRates[samplingRateIdx+1] / samplingRate
+              currDefField = sampleImg(currDefField, upSampleRate)
+                
         if not self.userOpts.usePaddedNet:
           imgData = imgData[:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
         
-        self.saveResults(imgData, landmarkData, defFields, dataloader, i)
+        self.saveResults(imgData, landmarkData, currDefField, dataloader, i)
                   
   def trainNet(self, dataloader):
     self.net.train()

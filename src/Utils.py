@@ -186,7 +186,7 @@ def sampleImgData(data, samplingRate):
     return (imgData, maskData, labelData, landmarkData)
   
 def sampleImg(img, samplingRate):
-  if samplingRate < 1:
+  if samplingRate != 1.0:
     img = torch.nn.functional.interpolate(img,scale_factor=samplingRate,mode='trilinear')
   return img
   

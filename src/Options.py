@@ -21,9 +21,9 @@ receptiveField = (44, 44, 44) #adapt depth and receptive field according to Rece
 netMinPatchSize = 48
 normImgPatches=False
 trainTillConvergence = True
-lossTollerance=0.00001
+lossTollerances=(0.001,0.0001,0.00001)
 cumulativeLossTollerance=100#0.001
-downSampleRates = (1.0,)#(0.25,0.5,1.0)
+downSampleRates = (0.5,1.0,)#(0.25,0.5,1.0)
 useMedianForSampling = (False,False,True,)
 
 
