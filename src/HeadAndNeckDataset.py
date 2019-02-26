@@ -127,6 +127,8 @@ class HeadAndNeckDataset(Dataset):
       timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
       imgData = imgData[:,:(imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
+      imgData[imgData < -1000] = -1000
+      imgData[imgData > 100] = 100
       
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):

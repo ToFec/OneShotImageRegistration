@@ -4,6 +4,7 @@ import numpy as np
 from math import sqrt
 
 class PointReader():
+  
   def loadData(self, filename):
     currPoints = []
     pointFile = open(filename,'r') 
@@ -43,25 +44,37 @@ class PointReader():
     pointFile = open(filename,'w')
     i = 0 
     for point in points:
-      pointFile.write('Landmark' + str(i) + ',' + str(point[0] * -1) + ',' + str(point[1] * -1) + ',' + str(point[2]) + '\n')
+      pointFile.write('Landmark' + str(i) + ',' + str(np.float32(point[0])[0] * -1) + ',' + str(np.float32(point[1])[0] * -1) + ',' + str(np.float32(point[2])[0]) + '\n')
       i+=1
     pointFile.close()     
 
 class PointProcessor():
+
+  def getFileName(self, path, fileName):
+    landmarkFileName = path + os.path.sep + fileName + '.pts'
+    if (os.path.isfile(landmarkFileName)):
+      return landmarkFileName
+    landmarkFileName = path + os.path.sep + fileName + '.txt'
+    if (os.path.isfile(landmarkFileName)):
+      return landmarkFileName
+    landmarkFileName = path + os.path.sep + fileName + '.fcsv'
+    if (os.path.isfile(landmarkFileName)):
+      return landmarkFileName
+    return None
 
   def calculatePointDistance(self, filepath0, filepath1):
     i = 0
     origFiles = []
     deformedFiles = []
     while (True):
-      landmarkFileName = filepath0 + os.path.sep + str(i) + '0.pts'
-      if (os.path.isfile(landmarkFileName)):
+      landmarkFileName = self.getFileName(filepath0,str(i) + '0')
+      if (landmarkFileName is not None):
         origFiles.append(landmarkFileName)
       else:
         break
       
-      landmarkFileName = filepath1 + os.path.sep + str(i) + '0deformed.pts'
-      if (os.path.isfile(landmarkFileName)):
+      landmarkFileName = self.getFileName(filepath1, str(i) + '0deformed')
+      if (landmarkFileName is not None):
         deformedFiles.append(landmarkFileName)
 
       i = i + 1
@@ -162,31 +175,34 @@ class PointProcessor():
   def correctPointPositions(self, filepath, referenceImg):
     imgFilePath = filepath + os.path.sep + referenceImg
     if (os.path.isfile(imgFilePath)):
-      reader = sitk.ImageFileReader()
-      reader.SetFileName(imgFilePath)
-      reader.ReadImageInformation()
-      imgSize = reader.GetSize()
-      imgSpacing = reader.GetSpacing()
-      imgOrigin = reader.GetOrigin()
+      sitkImg = sitk.ReadImage(imgFilePath)
+      
+      imgSize = sitkImg.GetSize()
+      imgSpacing = sitkImg.GetSpacing()
+      imgOrigin = sitkImg.GetOrigin()
       
       ySizeHalf = imgSize[1] / 2.0
       offset = imgOrigin[1] + ySizeHalf * imgSpacing[1]
       if (imgSize[1] % 2 == 0):
         offset -= imgSpacing[1] / 2
-      
-      
+        
       i = 0
       pr = PointReader()
       while (True):
-        pointFileName = filepath + os.path.sep + str(i) + '0.pts'
-        if (os.path.isfile(pointFileName)):
+        pointFileName = self.getFileName(filepath, str(i) + '0')
+        if pointFileName is not None:
           newPoints = []
           points = pr.loadData(pointFileName)
-          for point in points:
-            newPoint = (point[0], point[1] + offset, point[2])
-            newPoints.append(newPoint)
+          if '.pts' in pointFileName:
+            for point in points:
+              newPoint = ([point[0]], [point[1] + offset], [point[2]])
+              newPoints.append(newPoint)
+          elif '.txt' in pointFileName:
+            for point in points:
+              pointWorldCoord = sitkImg.TransformIndexToPhysicalPoint(sitk.VectorInt64([int(point[0]), int(point[1]), int(point[2])]))
+              newPoints.append(([pointWorldCoord[0]], [pointWorldCoord[1]], [pointWorldCoord[2]]))
           pr.saveData(filepath + os.path.sep + str(i) + '00.pts', newPoints)
-          pr.saveDataFcsv(filepath + os.path.sep + str(i) + '00.fcsv', newPoints)
+          pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '00.fcsv', newPoints)
         else:
           break
         i=i+1
