@@ -26,7 +26,7 @@ class Optimize():
     self.finalNumberIterations = [0,0]
     
     logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
-    self.logFile = open(logfileName,'w', buffering=0)
+    self.logFile = open(logfileName,'w')
     
   def __enter__(self):
         return self

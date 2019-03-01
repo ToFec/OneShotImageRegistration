@@ -127,7 +127,7 @@ class HeadAndNeckDataset(Dataset):
       nuOfDownSampleLayers = Options.netDepth - 1
       nuOfDownSampleSteps = len(Options.downSampleRates) -1
       timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
-      imgData = imgData[:,:(imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
+      imgData = imgData[:,:int((imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo),:int(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
 #       imgData[imgData < -1000] = -1000
 #       imgData[imgData > 100] = 100

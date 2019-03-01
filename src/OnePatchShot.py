@@ -22,7 +22,7 @@ def main(argv):
   
   try:
     opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'numberOfEpochs=', 'outputPath='])
-  except getopt.GetoptError, e:
+  except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
     return

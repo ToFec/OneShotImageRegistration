@@ -62,7 +62,7 @@ class UNet(nn.Module):
   def forward(self, x):
     
     encoder_outs = []
-    supervisionInputs = range(len(self.encoders))
+    supervisionInputs = list(range(len(self.encoders)))#python3
     for i, encoder in enumerate(self.encoders):
       x = encoder(x)
       rFOffSet = self.receptiveFieldOffsets[self.depth - 2 - i]

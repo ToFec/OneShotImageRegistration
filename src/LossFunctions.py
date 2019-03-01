@@ -109,12 +109,15 @@ class LossFunctions():
     t = vecField[:,idx+1,:,:].detach()
     loss10 = torch.zeros(vecField.shape, device=device, requires_grad=False)
     weights = torch.max(torch.abs(self.imgData[imgidx,:,idx+1,:,:] - self.imgData[imgidx,:,idx,:,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-    loss10[:,idx,:,:] = torch.abs(t -vecField[:,idx,:,:])
-    TODO: need to weight every vector direction with weight of corresponding image
+    weightsShape = weights.shape
+    tmp = weights.view(weightsShape[0],-1).repeat(1,3).view(weightsShape[0]*3,weightsShape[1],weightsShape[2],weightsShape[3])
+    loss10[:,idx,:,:] = torch.abs(t -vecField[:,idx,:,:]) * tmp
     
     t = vecField[:,idx,:,:].detach()
     loss11 = torch.zeros(vecField.shape, device=device, requires_grad=False)
     weights = torch.max(torch.abs(self.imgData[imgidx,:,idx,:,:] - self.imgData[imgidx,:,idx+1,:,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
+    weightsShape = weights.shape
+    tmp = weights.view(weightsShape[0],-1).repeat(1,3).view(weightsShape[0]*3,weightsShape[1],weightsShape[2],weightsShape[3])
     loss11[:,idx+1,:,:] = torch.abs(t - vecField[:,idx+1,:,:])
     loss1 = (loss10 + loss11) * self.dimWeight[0]
     

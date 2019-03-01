@@ -273,7 +273,7 @@ class PointProcessor():
 def main(argv):
   try:
     opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert' ])
-  except getopt.GetoptError, e:
+  except getopt.GetoptError as e:#python3
     print(e)
     return
   
