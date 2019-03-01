@@ -20,6 +20,7 @@ class HeadAndNeckDataset(Dataset):
         self.meansAndStds = {}
         self.spacings = {}
         self.origins = {}
+        self.directionCosines = {}
         try:        
           trianingCSVFileReader = csv.reader(csvtrainingFiles, delimiter=';', encoding='iso8859_15')
           if (self.loadOnInstantiation):
@@ -92,7 +93,7 @@ class HeadAndNeckDataset(Dataset):
     def loadData(self, idx):
       imgData = []
       spacing = []
-      origin = []
+      imgSize = []
       trainingFileNames = self.dataFileList[idx]
       maskFileNames = self.maskFileList[idx]
       labelsFileNames = self.labelFileList[idx]
@@ -103,22 +104,23 @@ class HeadAndNeckDataset(Dataset):
         tmp = sitk.ReadImage(str(trainingFileName))
         imgNii = sitk.GetArrayFromImage(tmp)
         curSpacing = tmp.GetSpacing()
+        currImgSize = tmp.GetSize()
         if (len(spacing)):
           if(curSpacing != spacing):
             print('Error: input images do not have same voxel spacing.')
         else:
           spacing = curSpacing
           
-        curOrigin = tmp.GetOrigin()
-        if (len(origin)):
-          if(curOrigin != origin):
-            print('Error: input images do not have same voxel spacing.')
+        if (len(imgSize)):
+          if(currImgSize != imgSize):
+            print('Error: input images do not have same size.')
         else:
-          origin = curOrigin
+          imgSize = currImgSize
           
         imgData.append(imgNii)
         self.spacings[idx] = spacing
-        self.origins[idx] = origin
+        self.origins[idx] = tmp.GetOrigin()
+        self.directionCosines[idx] = tmp.GetDirection()
         
       imgData = np.stack(imgData).astype('float32')
       
@@ -127,8 +129,8 @@ class HeadAndNeckDataset(Dataset):
       timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
       imgData = imgData[:,:(imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
-      imgData[imgData < -1000] = -1000
-      imgData[imgData > 100] = 100
+#       imgData[imgData < -1000] = -1000
+#       imgData[imgData > 100] = 100
       
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
@@ -195,6 +197,7 @@ class HeadAndNeckDataset(Dataset):
           data = data + imgMean
         data.SetSpacing(self.spacings[idx])
         data.SetOrigin(self.origins[idx])
+        data.SetDirection(self.directionCosines[idx])
       if not os.path.isdir(path):
         os.makedirs(path)
       sitk.WriteImage(data, path + os.path.sep + filename)

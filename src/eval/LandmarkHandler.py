@@ -2,6 +2,7 @@ import sys, getopt, os
 import SimpleITK as sitk
 import numpy as np
 from math import sqrt
+from fileinput import filename
 
 class PointReader():
   
@@ -26,10 +27,10 @@ class PointReader():
         currPoints.append(point)
     return currPoints
   
-  def saveData(self, filename, points):
+  def saveData(self, filename, points, seperator=' '):
     pointFile = open(filename,'w') 
     for point in points:
-      pointFile.write(str(np.float32(point[0])[0]) + ' ' + str(np.float32(point[1])[0]) + ' ' + str(np.float32(point[2])[0]) + '\n') ##little hack to print torch tensors and numpy values
+      pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n') ##little hack to print torch tensors and numpy values
     pointFile.close()
 
   def saveDataFcsv(self, filename, points):
@@ -42,9 +43,17 @@ class PointReader():
   
   def saveDataFcsvSlicer(self, filename, points):
     pointFile = open(filename,'w')
-    i = 0 
+    i = 0
+    pointsAreLists = False
+    if len(points) > 0:
+      if type(points[0][0]) == list:
+        pointsAreLists = True
+         
     for point in points:
-      pointFile.write('Landmark' + str(i) + ',' + str(np.float32(point[0])[0] * -1) + ',' + str(np.float32(point[1])[0] * -1) + ',' + str(np.float32(point[2])[0]) + '\n')
+      if pointsAreLists:
+        pointFile.write('Landmark' + str(i) + ',' + str(np.float32(point[0])[0] * -1) + ',' + str(np.float32(point[1])[0] * -1) + ',' + str(np.float32(point[2])[0]) + '\n')
+      else:
+        pointFile.write('Landmark' + str(i) + ',' + str(np.float32(point[0]) * -1) + ',' + str(np.float32(point[1]) * -1) + ',' + str(np.float32(point[2])) + '\n')
       i+=1
     pointFile.close()     
 
@@ -66,18 +75,23 @@ class PointProcessor():
     i = 0
     origFiles = []
     deformedFiles = []
-    while (True):
-      landmarkFileName = self.getFileName(filepath0,str(i) + '0')
-      if (landmarkFileName is not None):
-        origFiles.append(landmarkFileName)
-      else:
-        break
-      
-      landmarkFileName = self.getFileName(filepath1, str(i) + '0deformed')
-      if (landmarkFileName is not None):
-        deformedFiles.append(landmarkFileName)
-
+    if os.path.isfile(filepath0) and os.path.isfile(filepath1):
+      origFiles.append(filepath0)
+      deformedFiles.append(filepath1)
       i = i + 1
+    else:
+      while (True):
+        landmarkFileName = self.getFileName(filepath0,str(i) + '0')
+        if (landmarkFileName is not None):
+          origFiles.append(landmarkFileName)
+        else:
+          break
+        
+        landmarkFileName = self.getFileName(filepath1, str(i) + '0deformed')
+        if (landmarkFileName is not None):
+          deformedFiles.append(landmarkFileName)
+  
+        i = i + 1
 
     if (len(origFiles) != len(deformedFiles)):
       deformedFiles = origFiles
@@ -101,6 +115,7 @@ class PointProcessor():
         diff = point0[dim] - point1[dim]
         diff *= diff
         distance += diff
+      print(sqrt(distance))
       meanDistance += sqrt(distance)
     meanDistance /= len(points0)
     return meanDistance
@@ -115,9 +130,11 @@ class PointProcessor():
       refImgItk = sitk.ReadImage(str(referenceImg))
       defFieldSpacing = refImgItk.GetSpacing()
       defFieldOrigin = refImgItk.GetOrigin()
+      defFieldDirection = refImgItk.GetDirection()
     else:
       defFieldSpacing = defFieldITK.GetSpacing()
       defFieldOrigin = defFieldITK.GetOrigin()
+      defFieldDirection = defFieldITK.GetDirection()
       
     defField = np.moveaxis(defField, 0, 2)
     defField = np.moveaxis(defField, 0, 1)
@@ -125,11 +142,11 @@ class PointProcessor():
     pr = PointReader()
     points = pr.loadData(filePath)
     
-    newPoints = self.deformPointsWithField(points, defField, defFieldOrigin, defFieldSpacing)
+    newPoints = self.deformPointsWithField(points, defField, defFieldOrigin, defFieldSpacing, defFieldDirection)
     filename, file_extension = os.path.splitext(filePath)  
     pr.saveDataFcsv(filename + 'deformed.fcsv', newPoints)
   
-  def deformPointsWithField(self, points, defField, defFieldOrigin, defFieldSpacing):
+  def deformPointsWithField(self, points, defField, defFieldOrigin, defFieldSpacing, direction):
     
     newPoints = []
     for point in points:
@@ -138,8 +155,14 @@ class PointProcessor():
       idx1 = []
       part0 = []
       part1 = []
+      pointMinusOrigin = [point[0]- defFieldOrigin[0],
+                          point[1]- defFieldOrigin[1],
+                          point[2]- defFieldOrigin[2]]
+      #so far we consider only axis aligend images 
+      idxCoords = []
       for idx in range(0,3):
-        ijk = (point[idx] - defFieldOrigin[idx]) / defFieldSpacing[idx]
+        ijk = pointMinusOrigin[idx] / (defFieldSpacing[idx] * direction[idx*3 + idx])
+        idxCoords.append(ijk)
         firstIdx = int(ijk)
         idx0.append( firstIdx )
         idx1.append( firstIdx + 1 )
@@ -154,23 +177,65 @@ class PointProcessor():
         part0[0] * part1[1] * part1[2] * defField[idx0[0],idx1[1],idx1[2],:] + part1[0] * part1[1] * part0[2] * defField[idx1[0],idx1[1],idx0[2],:] + \
         part1[0] * part0[1] * part1[2] * defField[idx1[0],idx0[1],idx1[2],:] + part1[0] * part1[1] * part1[2] * defField[idx1[0],idx1[1],idx1[2],:]
       
-      pointPosNew = (point[0] + defVec[0], point[1] + defVec[1], point[2] + defVec[2])
+      pointPosNew=[0.0,0.0,0.0]
+      for idx in range(0,3):
+        pointPosNew[idx] = ((point[idx] + defVec[idx]))# * defFieldSpacing[idx] * direction[idx*3 + idx]) + defFieldOrigin[idx]
+      
       newPoints.append(pointPosNew)
     
     return newPoints    
     
       
   def convertToFcsv(self, filepath):
-    i = 0
     pr = PointReader()
-    while (True):
-      pointFileName = filepath + os.path.sep + str(i) + '0.pts'
-      if (os.path.isfile(pointFileName)):
-        points = pr.loadData(pointFileName)
-        pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '0.fcsv', points)
-      else:
-        break
-      i=i+1  
+    if (os.path.isfile(filepath)):
+      points = pr.loadData(filepath)
+      filePathName, _ = os.path.splitext(filepath)
+      pr.saveDataFcsvSlicer(filePathName + '.fcsv', points)
+    else:
+      i = 0
+      while (True):
+        pointFileName = filepath + os.path.sep + str(i) + '0.pts'
+        if (os.path.isfile(pointFileName)):
+          points = pr.loadData(pointFileName)
+          pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '0.fcsv', points)
+        else:
+          break
+        i=i+1  
+  
+  def convertTxtToPts(self, filename, referenceImg):
+    sitkImg = sitk.ReadImage(referenceImg)
+    pr = PointReader()
+    newPoints = []
+    points = pr.loadData(filename)
+    for point in points:
+      pointWorldCoord = sitkImg.TransformIndexToPhysicalPoint(sitk.VectorInt64([int(point[0]), int(point[1]), int(point[2])]))
+      newPoints.append(([pointWorldCoord[0]], [pointWorldCoord[1]], [pointWorldCoord[2]]))
+    return newPoints
+  
+  def convertPtsToTxt(self, filename, referenceImg):
+    sitkImg = sitk.ReadImage(referenceImg)
+    pr = PointReader()
+    newPoints = []
+    points = pr.loadData(filename)
+    for point in points:
+      pointWorldCoord = sitkImg.TransformPhysicalPointToIndex(sitk.VectorDouble([int(point[0]), int(point[1]), int(point[2])]))
+      newPoints.append(([pointWorldCoord[0]], [pointWorldCoord[1]], [pointWorldCoord[2]]))
+    return newPoints
+
+  def convertPoints(self, filename, referenceImg):
+    pr = PointReader()
+    filePathName, _ = os.path.splitext(filename)
+    if '.pts' in filename:
+      newPoints = self.convertPtsToTxt(filename, referenceImg)
+      fileNameNew = filePathName + '.txt'
+      pr.saveData(fileNameNew, newPoints, '\t')
+    elif '.txt' in filename:
+      newPoints = self.convertTxtToPts(filename, referenceImg)
+      fileNameNew = filePathName + '.pts'
+      pr.saveData(fileNameNew, newPoints)
+    else:
+      return
   
   def correctPointPositions(self, filepath, referenceImg):
     imgFilePath = filepath + os.path.sep + referenceImg
@@ -197,20 +262,17 @@ class PointProcessor():
             for point in points:
               newPoint = ([point[0]], [point[1] + offset], [point[2]])
               newPoints.append(newPoint)
-          elif '.txt' in pointFileName:
-            for point in points:
-              pointWorldCoord = sitkImg.TransformIndexToPhysicalPoint(sitk.VectorInt64([int(point[0]), int(point[1]), int(point[2])]))
-              newPoints.append(([pointWorldCoord[0]], [pointWorldCoord[1]], [pointWorldCoord[2]]))
           pr.saveData(filepath + os.path.sep + str(i) + '00.pts', newPoints)
           pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '00.fcsv', newPoints)
         else:
           break
         i=i+1
-      
+    else:
+      print('reference imgage not found')
   
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=' ])
+    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert' ])
   except getopt.GetoptError, e:
     print(e)
     return
@@ -220,6 +282,7 @@ def main(argv):
   outputPath = '.'
   calcDiff = False
   correctPos = False  
+  convertPoints = False
   for opt, arg in opts:
     if opt == '--path0':
       filepath0 = arg
@@ -231,12 +294,16 @@ def main(argv):
       filepath1 = arg
     elif opt == '--outputPath':
       outputPath = arg
+    elif opt == '--convert':
+      convertPoints = True
     elif opt == '--refImg':
       referenceImg = arg    
         
   pointProcessor = PointProcessor()   
   if (correctPos):
     pointProcessor.correctPointPositions(filepath0, referenceImg)
+  elif(convertPoints):
+    pointProcessor.convertPoints(filepath0, referenceImg)
   elif(calcDiff):
     distances = pointProcessor.calculatePointDistance(filepath0, filepath1)
     logfile = outputPath + os.path.sep + 'distances.csv'    

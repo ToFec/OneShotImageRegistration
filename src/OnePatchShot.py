@@ -46,6 +46,9 @@ def main(argv):
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
+  if not os.path.isdir(userOpts.outputPath):
+    os.makedirs(userOpts.outputPath)
+
   headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
@@ -54,8 +57,6 @@ def main(argv):
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
   with Optimize(net, userOpts) as trainTestOptimize:
     print(net)
-    if not os.path.isdir(userOpts.outputPath):
-      os.makedirs(userOpts.outputPath)
     start = time.time()
     if False:#userOpts.device == "cpu":
       net.share_memory()
