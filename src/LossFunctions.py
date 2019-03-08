@@ -64,7 +64,7 @@ class LossFunctions():
       loss013 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-4,:,:]) * 0.4
       loss014 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-5,:,:]) * 0.2
       loss01 = loss010 + loss011 + loss012 + loss013 + loss014
-    loss0 = torch.sum(loss00 + loss01) * self.dimWeight[0]
+    loss0 = torch.sum(loss00 + loss01) / self.dimWeight[0]
     
     if idx[1] > 0:
       loss100 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]-1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,0,:])
@@ -80,7 +80,7 @@ class LossFunctions():
       loss113 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-4,:]) * 0.4
       loss114 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-5,:]) * 0.2
       loss11 = loss110 + loss111 + loss112 + loss113 + loss114
-    loss1 = torch.sum(loss10 + loss11) * self.dimWeight[1]
+    loss1 = torch.sum(loss10 + loss11) / self.dimWeight[1]
       
     if idx[2] > 0:
       loss200 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]-1] - defFields[:,:,:,:,0])
@@ -96,7 +96,7 @@ class LossFunctions():
       loss213 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-4]) * 0.4
       loss214 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-5]) * 0.2
       loss21 = loss210 + loss211 + loss212 + loss213 + loss214
-    loss2 = torch.sum(loss20 + loss21) * self.dimWeight[2]
+    loss2 = torch.sum(loss20 + loss21) / self.dimWeight[2]
       
     loss = torch.sum(loss0 + loss1 + loss2) / (defFields.shape[2]*defFields.shape[3]*defFields.shape[4])
     return loss / defFields.shape[0]
@@ -119,7 +119,7 @@ class LossFunctions():
     weightsShape = weights.shape
     tmp = weights.view(weightsShape[0],-1).repeat(1,3).view(weightsShape[0]*3,weightsShape[1],weightsShape[2],weightsShape[3])
     loss11[:,idx+1,:,:] = torch.abs(t - vecField[:,idx+1,:,:])
-    loss1 = (loss10 + loss11) * self.dimWeight[0]
+    loss1 = (loss10 + loss11) / self.dimWeight[0]
     
     return loss1
   
@@ -134,7 +134,7 @@ class LossFunctions():
     t = vecField[:,:,idx,:].detach()
     loss21 = torch.zeros(vecField.shape, device=device, requires_grad=False)
     loss21[:,:,idx+1,:] = torch.abs(t - vecField[:,:,idx+1,:]) * torch.max(torch.abs(self.imgData[imgidx,:,:,idx,:] - self.imgData[imgidx,:,:,idx+1,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-    loss2 = (loss20 + loss21) * self.dimWeight[1]
+    loss2 = (loss20 + loss21) / self.dimWeight[1]
     return loss2
   
   def getSmoothnessForDir3(self, imgidx, device):
@@ -148,7 +148,7 @@ class LossFunctions():
     t = vecField[:,:,:,idx].detach()
     loss31 = torch.zeros(vecField.shape, device=device, requires_grad=False)
     loss31[:,:,:,idx+1] = torch.abs(t - vecField[:,:,:,idx+1]) * torch.max(torch.abs(self.imgData[imgidx,:,:,:,idx] - self.imgData[imgidx,:,:,:,idx+1])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-    loss3 = (loss30 + loss31) * self.dimWeight[2]
+    loss3 = (loss30 + loss31) / self.dimWeight[2]
     return loss3
   
   def smoothnessVecField(self, device):
