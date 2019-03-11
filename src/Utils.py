@@ -157,7 +157,12 @@ def compareDicts(dict1, dict2):
 
 def printHash(obj):
   h=pickle.dumps(obj)
-#   print hash(h)
+  print hash(h)
+  
+def numpyRepeat(obj, times):
+  objShape = obj.shape
+  tmp = obj.view(objShape[0],-1).repeat(1,times).view(objShape[0]*times,objShape[1],objShape[2],objShape[3])
+  return tmp
   
 def sampleImgData(data, samplingRate):
     imgDataOrig = data['image']
