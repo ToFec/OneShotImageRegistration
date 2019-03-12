@@ -20,13 +20,12 @@ class Optimize():
   def __init__(self, net, userOpts):
     self.net = net
     self.userOpts = userOpts
-    self.normalizeWeights()
     
     self.net.to(self.userOpts.device)
     self.finalNumberIterations = [0,0]
     
     logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
-    self.logFile = open(logfileName,'w')
+    self.logFile = open(logfileName,'w', buffering=0)
     
   def __enter__(self):
         return self
@@ -35,12 +34,6 @@ class Optimize():
     self.logFile.close()
     
   
-  def normalizeWeights(self):
-    weightSum = self.userOpts.ccW + self.userOpts.smoothW + self.userOpts.vecLengthW + self.userOpts.cycleW 
-    self.userOpts.ccW = self.userOpts.ccW  / weightSum
-    self.userOpts.smoothW = self.userOpts.smoothW  / weightSum
-    self.userOpts.vecLengthW = self.userOpts.vecLengthW  / weightSum
-    self.userOpts.cycleW = self.userOpts.cycleW  / weightSum
     
   def loadNet(self, filepath):
     self.net.load_state_dict(torch.load(filepath))
@@ -363,6 +356,13 @@ class Optimize():
           if firstSamplingRate < 1:
             upSampleRate = samplingRates[1] / firstSamplingRate
             currDefField = sampleImg(currDefField, upSampleRate)
+            currDefField = currDefField * upSampleRate
+            
+        self.saveResults(imgData, data['landmarks'], currDefField, dataloader, i)
+        imgDataOrig = sitk.GetImageFromArray(imgDataToWork[0,0, ])
+        dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(20) + 'image' + str(20) + 'channel' + str(20) + '.nrrd', 0, False)
+        return 
+            
         del firstImgData, firstmaskData, firstlabelData, firstsampler, firstIdxs
         
         for samplingRateIdx, samplingRate in enumerate(samplingRates[1:],1):
@@ -407,6 +407,7 @@ class Optimize():
             if samplingRate < 1:
               upSampleRate = samplingRates[samplingRateIdx+1] / samplingRate
               currDefField = sampleImg(currDefField, upSampleRate)
+              currDefField = currDefField * upSampleRate
                 
         if not self.userOpts.usePaddedNet:
           imgData = imgData[:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]

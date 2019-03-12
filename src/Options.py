@@ -1,13 +1,12 @@
 import torch
-
+test = True
 
 numberOfEpochs = 500
 testMode = True
 trainMode = True
 oneShot = True
 usePaddedNet=True
-ccW=0.999
-smoothW = 0.001
+ccW=1.0
 vecLengthW = 0.0
 cycleW = 0.00
 trainingFileNamesCSV=''
@@ -23,8 +22,14 @@ normImgPatches=False
 trainTillConvergence = True
 lossTollerances=(0.00001,)
 cumulativeLossTollerance=100#0.001
-downSampleRates = (0.25,0.5,1.0)
-boundarySmoothnessW=(100.0,10.0,1.0)
+if test:
+  downSampleRates = (0.25, 1.0,)
+  boundarySmoothnessW=(0.0,)
+  smoothW = (0.0001,)
+else:
+  downSampleRates = (0.25,0.5,1.0)
+  boundarySmoothnessW=(100.0,10.0,1.0)
+  smoothW = (0.001,0.001,0.001)
 useMedianForSampling = (False,False,True,)
 
 

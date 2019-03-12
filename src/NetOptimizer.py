@@ -11,6 +11,10 @@ class NetOptimizer(object):
     self.net = net
     self.userOpts = options
         
+  def normalizeWeights(self, ccW, sW, cyW):
+    weightSum = ccW + sW + cyW
+    return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
+            
   def optimizeNet(self, imgDataToWork, labelToWork, currDefFields = None, idx=None, itIdx=0):
     
     # zero the parameter gradients
@@ -27,6 +31,12 @@ class NetOptimizer(object):
     
     boundaryLoss = 0.0
     smoothnessLoss = 0.0
+    
+    smoothNessWeight = self.userOpts.smoothW[itIdx]
+    crossCorrWeight = self.userOpts.ccW
+    cyclicWeight = self.userOpts.cycleW
+    crossCorrWeight,smoothNessWeight, cyclicWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight)
+    
     if (currDefFields is not None) and (idx is not None):
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
         
@@ -65,7 +75,7 @@ class NetOptimizer(object):
 #     
 #     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
 #     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.cycleW * cycleLoss
-    loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF
+    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF
 #     print('cc: %.5f smmothness: %.5f' % (crossCorr, smoothnessDF))
     #print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
