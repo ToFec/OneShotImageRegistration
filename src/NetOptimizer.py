@@ -22,12 +22,17 @@ class NetOptimizer(object):
         
     defFields = self.net(imgDataToWork)
     
+    if (currDefFields is not None) and (idx is not None):
+      addedField = currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    else:
+      addedField = defFields
+    
     cropStart0 = (imgDataToWork.shape[2]-defFields.shape[2])/2
     cropStart1 = (imgDataToWork.shape[3]-defFields.shape[3])/2
     cropStart2 = (imgDataToWork.shape[4]-defFields.shape[4])/2
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+defFields.shape[2], cropStart1:cropStart1+defFields.shape[3], cropStart2:cropStart2+defFields.shape[4]]
     
-    lossCalculator = lf.LossFunctions(imgDataToWork, defFields, currDefFields, self.spacing)
+    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currDefFields, self.spacing)
     
     boundaryLoss = 0.0
     smoothnessLoss = 0.0
@@ -60,7 +65,7 @@ class NetOptimizer(object):
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-      deformedTmp = Utils.deformImage(imgToDef, defFields[: , chanRange, ], self.userOpts.device, False)
+      deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
 #       cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')

@@ -6,7 +6,7 @@ testMode = True
 trainMode = True
 oneShot = True
 usePaddedNet=True
-ccW=1.0
+
 vecLengthW = 0.0
 cycleW = 0.00
 trainingFileNamesCSV=''
@@ -20,16 +20,20 @@ receptiveField = (44, 44, 44) #adapt depth and receptive field according to Rece
 netMinPatchSize = 48
 normImgPatches=False
 trainTillConvergence = True
-lossTollerances=(0.00001,)
+
 cumulativeLossTollerance=100#0.001
 if test:
-  downSampleRates = (0.25, 1.0,)
-  boundarySmoothnessW=(0.0,)
-  smoothW = (0.0001,)
-else:
+  ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
-  boundarySmoothnessW=(100.0,10.0,1.0)
+  boundarySmoothnessW=(10.0,10.0,10.0)
   smoothW = (0.001,0.001,0.001)
+  lossTollerances=(0.00001,)
+else:
+  ccW=1.0
+  downSampleRates = (0.25,0.5,1.0)
+  boundarySmoothnessW=(10.0,10.0,10.0)
+  smoothW = (0.001,0.001,0.001)
+  lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True,)
 
 
