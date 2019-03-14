@@ -327,13 +327,13 @@ class Optimize():
         print('firstIdxs: ', firstIdxs)
         for patchIdx, idx in enumerate(firstIdxs):
           
-#           optimizer = optim.Adam(self.net.parameters())
-#           netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
+          optimizer = optim.Adam(self.net.parameters())
+          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
           
           print('register patch %i out of %i patches.' % (patchIdx, len(firstIdxs)))
           imgDataToWork = firstsampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
           imgDataToWork = sampleImg(imgDataToWork, 1.0)
-          sampledIdx = [int(tmp*firstSamplingRate) for tmp in idx]
+          sampledIdx = idx
           imgDataToWork = imgDataToWork.to(self.userOpts.device)
           patchIteration=0
           lossCounter = 0
@@ -385,8 +385,8 @@ class Optimize():
             lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
               
-#               optimizer = optim.Adam(self.net.parameters())
-#               netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)              
+              optimizer = optim.Adam(self.net.parameters())
+              netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)              
               
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 #               if netStateDicts[patchIdx] is not None:
