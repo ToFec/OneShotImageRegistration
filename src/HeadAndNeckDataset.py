@@ -157,6 +157,8 @@ class HeadAndNeckDataset(Dataset):
         imgData = imgData / imgStd
         self.meansAndStds[idx] = (imgMean, imgStd)
       
+      imgData, maskData, labelData = self.getRightSizedData(imgData, maskData, labelData, idx)
+      
       landmarkData = []
       if (len(trainingFileNames) == len(landMarkFileNames)):
         pr = PointReader()
@@ -173,11 +175,9 @@ class HeadAndNeckDataset(Dataset):
     
     def getRightSizedData(self, imgData, maskData, labelData, idx):
       
+      nuOfDownSampleLayers = Options.netDepth - 1
       nuOfDownSampleSteps = len(Options.downSampleRates) -1
-      timesDividableByTwo = 2**(nuOfDownSampleSteps)
-      
-      maskData = maskData[:,:(maskData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[3]/timesDividableByTwo)*timesDividableByTwo]        
-      
+      timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
       
       if len(maskData) > 0:
         maskChanSum = np.sum(maskData,0)
@@ -208,6 +208,8 @@ class HeadAndNeckDataset(Dataset):
         
         if len(labelData) > 0:
           labelData = labelData[:,:int(labelData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
+          
+      return imgData, maskData, labelData
     
     def getMinMax(self, minVal, maxVal, maxLength, timesDividableByTwo):
       l = maxVal - minVal
