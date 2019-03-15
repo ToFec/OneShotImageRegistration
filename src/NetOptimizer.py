@@ -15,17 +15,20 @@ class NetOptimizer(object):
     weightSum = ccW + sW + cyW
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
             
-  def optimizeNet(self, imgDataToWork, labelToWork, currDefFields = None, idx=None, itIdx=0):
+  def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0):
     
     # zero the parameter gradients
     self.optimizer.zero_grad()
         
     defFields = self.net(imgDataToWork)
     
-    if (currDefFields is not None) and (idx is not None):
-      addedField = currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    if (lastDefField is not None) and (idx is not None):
+      addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
     else:
       addedField = defFields
+      
+    if currDefFields is not None:
+      currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = addedField.detach()
     
     cropStart0 = (imgDataToWork.shape[2]-defFields.shape[2])/2
     cropStart1 = (imgDataToWork.shape[3]-defFields.shape[3])/2

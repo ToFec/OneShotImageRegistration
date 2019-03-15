@@ -18,6 +18,7 @@ netDepth=3
 numberOfFiltersFirstLayer=32
 receptiveField = (44, 44, 44) #adapt depth and receptive field according to ReceptiveFieldSizeCalculator in repository
 netMinPatchSize = 48
+netMinPatchSizePadded = 4
 normImgPatches=False
 trainTillConvergence = True
 
@@ -25,7 +26,7 @@ cumulativeLossTollerance=100#0.001
 if test:
   ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
-  boundarySmoothnessW=(1.0,1.0,1.0)
+  boundarySmoothnessW=(1.0,10.0,10.0)
   smoothW = (0.001,0.001,0.001)
   lossTollerances=(0.00001,)
 else:
@@ -33,8 +34,8 @@ else:
   downSampleRates = (0.25,0.5,1.0)
   boundarySmoothnessW=(1.0,1.0,1.0)
   smoothW = (0.001,0.001,0.001)
-  lossTollerances=(0.00001,)
-useMedianForSampling = (False,False,True,)
+  lossTollerances=(0.001,0.00001)
+useMedianForSampling = (False,False,False)
 
 
 

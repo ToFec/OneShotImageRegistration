@@ -294,128 +294,55 @@ class Optimize():
       receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
       
       for i, data in enumerate(dataloader, 0):
-        imgData = data['image']
-        labelData = data['label']
-        maskData = data['mask']
         
         netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
         
         samplerShift = (0,0,0)
         if not self.userOpts.usePaddedNet:
           padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
-          imgData, maskData, labelData = getPaddedData(imgData, maskData, labelData, padVals)
+          data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
           samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
         
-#         imgData = imgData.to(self.userOpts.device)
-        sampler = Sampler(maskData, imgData, labelData, self.userOpts.patchSize) 
-        idxs = sampler.getIndicesForOneShotSampling(samplerShift)
-        print('idxs: ', idxs)
-        netStateDicts = [None for _ in idxs]
-        optimizerStateDicts = [None for _ in idxs]
-        currDefField = None
         samplingRates = self.userOpts.downSampleRates
         
         self.net.train()
         
-        firstSamplingRate = samplingRates[0]
-        currDefField = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, int(imgData.shape[2]*firstSamplingRate), int(imgData.shape[3]*firstSamplingRate), int(imgData.shape[4]*firstSamplingRate)), device=self.userOpts.device, requires_grad=False)
-        firstLT = self.userOpts.lossTollerances[0]
-        firstImgData, firstmaskData, firstlabelData, _ = sampleImgData(data, firstSamplingRate)
-        firstImgData = firstImgData.to(self.userOpts.device)
-        firstsampler = Sampler(firstmaskData, firstImgData, firstlabelData, self.userOpts.patchSize) 
-        firstIdxs = firstsampler.getIndicesForOneShotSampling(samplerShift, False)
-        print('firstIdxs: ', firstIdxs)
-        for patchIdx, idx in enumerate(firstIdxs):
-          
-          optimizer = optim.Adam(self.net.parameters())
-          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
-          
-          print('register patch %i out of %i patches.' % (patchIdx, len(firstIdxs)))
-          imgDataToWork = firstsampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-          imgDataToWork = sampleImg(imgDataToWork, 1.0)
-          sampledIdx = idx
-          imgDataToWork = imgDataToWork.to(self.userOpts.device)
-          patchIteration=0
-          lossCounter = 0
-          runningLoss = torch.ones(10, device=self.userOpts.device)
-          while True:
-            loss, tmpField = netOptim.optimizeNet(imgDataToWork, None)
-            currDefField[:, :, sampledIdx[0]:sampledIdx[0]+tmpField.shape[2], sampledIdx[1]:sampledIdx[1]+tmpField.shape[3], sampledIdx[2]:sampledIdx[2]+tmpField.shape[4]] = tmpField
-            detachLoss = loss.detach()                
-            runningLoss[lossCounter] = detachLoss
-            if lossCounter == 9:
-              meanLoss = runningLoss.mean()
-              self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
-              self.logFile.write('\n')
-              lossCounter = 0
-              if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, firstLT)):
-#                 netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
-#                 optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
-                break
-            else:
-              lossCounter+=1
-            patchIteration+=1
-            
-        with torch.no_grad():
-          if firstSamplingRate < 1:
-            upSampleRate = samplingRates[1] / firstSamplingRate
-            currDefField = currDefField * upSampleRate
-            currDefField = sampleImg(currDefField, upSampleRate)
-            
-            
-        del firstImgData, firstmaskData, firstlabelData, firstsampler, firstIdxs
+        currDefField = None
         
-        upSampleRate = samplingRates[2] / samplingRates[1]
-        tmpField = tmpField * upSampleRate
-        tmpField = sampleImg(currDefField, upSampleRate)
-        
-        
-        defX = tmpField[0, 0 * 3, ].detach() * dataloader.dataset.spacings[0][0] * dataloader.dataset.directionCosines[0][0]
-        defY = tmpField[0, 0 * 3 + 1, ].detach() * dataloader.dataset.spacings[0][1] * dataloader.dataset.directionCosines[0][4]
-        defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataloader.dataset.spacings[0][2] * dataloader.dataset.directionCosines[0][8]
-        defField = getDefField(defX, defY, defZ)
-        defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-        dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'defFieldScaling' + str(00) + 'image' + str(00) + 'channel' + str(00) + '.nrrd', 00, False)
-        
-        for samplingRateIdx, samplingRate in enumerate(samplingRates[1:],1):
+        for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
-          for ltIdx, lossTollerance in enumerate(self.userOpts.lossTollerances):
+        
+          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+          sampledImgData = sampledImgData.to(self.userOpts.device)
+          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+          print('idxs: ', idxs)
+
+          if currDefField is None:
+            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+          
+          for _, lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
-            
+          
             lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
-              
-              optimizer = optim.Adam(self.net.parameters())
-              netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)              
-              
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-#               if netStateDicts[patchIdx] is not None:
-#                 stateDict = netStateDicts[patchIdx]
-#                 optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
-#                 self.net.load_state_dict(stateDict)
-                
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-              imgDataToWork = sampleImg(imgDataToWork, samplingRate)
-              sampledIdx = [int(tmp*samplingRate) for tmp in idx]
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
               
               patchIteration=0
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, sampledIdx, samplingRateIdx)
-                currDefField[:, :, sampledIdx[0]:sampledIdx[0]+tmpField.shape[2], sampledIdx[1]:sampledIdx[1]+tmpField.shape[3], sampledIdx[2]:sampledIdx[2]+tmpField.shape[4]] = lastDeffield[:, :, sampledIdx[0]:sampledIdx[0]+tmpField.shape[2], sampledIdx[1]:sampledIdx[1]+tmpField.shape[3], sampledIdx[2]:sampledIdx[2]+tmpField.shape[4]]+ tmpField
+                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
                   meanLoss = runningLoss.mean()
-                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
-                  self.logFile.write('\n')
+                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
-#                     netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
-#                     optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
                     break
                 else:
                   lossCounter+=1
@@ -428,30 +355,22 @@ class Optimize():
               currDefField = currDefField * upSampleRate
               currDefField = sampleImg(currDefField, upSampleRate)
               
-              
+              upSampleRate = 1.0 / samplingRate
               tmpField = tmpField * upSampleRate
               tmpField = sampleImg(tmpField, upSampleRate)
-              
           
-          defX = currDefField[0, 0 * 3, ].detach() * dataloader.dataset.spacings[0][0] * dataloader.dataset.directionCosines[0][0]
-          defY = currDefField[0, 0 * 3 + 1, ].detach() * dataloader.dataset.spacings[0][1] * dataloader.dataset.directionCosines[0][4]
-          defZ = currDefField[0, 0 * 3 + 2, ].detach() * dataloader.dataset.spacings[0][2] * dataloader.dataset.directionCosines[0][8]
-          defField = getDefField(defX, defY, defZ)
-          defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-          dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'defFieldScaling' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
-
           defX = tmpField[0, 0 * 3, ].detach() * dataloader.dataset.spacings[0][0] * dataloader.dataset.directionCosines[0][0]
           defY = tmpField[0, 0 * 3 + 1, ].detach() * dataloader.dataset.spacings[0][1] * dataloader.dataset.directionCosines[0][4]
           defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataloader.dataset.spacings[0][2] * dataloader.dataset.directionCosines[0][8]
           defField = getDefField(defX, defY, defZ)
           defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
           dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'singleDefField' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
-                
+              
         if not self.userOpts.usePaddedNet:
-          imgData = imgData[:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
+          data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
         
-        self.saveResults(imgData, data['landmarks'], currDefField, dataloader, i)
+        self.saveResults(data['image'], data['landmarks'], currDefField, dataloader, i)
                   
   def trainNet(self, dataloader):
     self.net.train()

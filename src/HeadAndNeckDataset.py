@@ -124,13 +124,16 @@ class HeadAndNeckDataset(Dataset):
         
       imgData = np.stack(imgData).astype('float32')
       
-      nuOfDownSampleLayers = Options.netDepth - 1
-      nuOfDownSampleSteps = len(Options.downSampleRates) -1
-      timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
-      imgData = imgData[:,:int((imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo),:int(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
-      
       imgData[imgData < -1000] = -1000
       imgData[imgData > 100] = 100
+      
+      labelData = []
+      if (len(trainingFileNames) == len(labelsFileNames)):
+        for labelsFileName in labelsFileNames:
+          tmp = sitk.ReadImage(str(labelsFileName))
+          labelsNii = sitk.GetArrayFromImage(tmp)
+          labelData.append(labelsNii)
+        labelData = np.stack(labelData)
       
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
@@ -140,30 +143,19 @@ class HeadAndNeckDataset(Dataset):
           maskData.append(maskNii)
         maskData = np.stack(maskData)
         
-#make dimensions even; otehrwise there are probs with average pooling and upsampling         
-        maskData = maskData[:,:(maskData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
-        
         imgMean = imgData[maskData > 0].mean()
         imgData = imgData - imgMean
         imgStd = imgData[maskData > 0].std()
         imgData = imgData / imgStd
         imgData[maskData == 0] = 0
         self.meansAndStds[idx] = (imgMean, imgStd)
+        
       else:
         imgMean = imgData.mean()
         imgData = imgData - imgMean
         imgStd = imgData.std()
         imgData = imgData / imgStd
         self.meansAndStds[idx] = (imgMean, imgStd)
-      
-      labelData = []
-      if (len(trainingFileNames) == len(labelsFileNames)):
-        for labelsFileName in labelsFileNames:
-          tmp = sitk.ReadImage(str(labelsFileName))
-          labelsNii = sitk.GetArrayFromImage(tmp)
-          labelData.append(labelsNii)
-        labelData = np.stack(labelData)
-        labelData = labelData[:,:(labelData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(labelData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(labelData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
       
       landmarkData = []
       if (len(trainingFileNames) == len(landMarkFileNames)):
@@ -179,6 +171,71 @@ class HeadAndNeckDataset(Dataset):
         sample = self.smooth(sample)
       return sample  
     
+    def getRightSizedData(self, imgData, maskData, labelData, idx):
+      
+      nuOfDownSampleSteps = len(Options.downSampleRates) -1
+      timesDividableByTwo = 2**(nuOfDownSampleSteps)
+      
+      maskData = maskData[:,:(maskData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:(maskData.shape[3]/timesDividableByTwo)*timesDividableByTwo]        
+      
+      
+      if len(maskData) > 0:
+        maskChanSum = np.sum(maskData,0)
+        minMaxXYZ = np.nonzero(maskChanSum)
+        min0 = minMaxXYZ[0].min()
+        max0 = minMaxXYZ[0].max()
+        
+        min1 = minMaxXYZ[1].min()
+        max1 = minMaxXYZ[1].max()
+        
+        min2 = minMaxXYZ[2].min()
+        max2 = minMaxXYZ[2].max()
+        
+        min0, max0 = self.getMinMax(min0, max0, maskData.shape[1], timesDividableByTwo)
+        min1, max1 = self.getMinMax(min1, max1, maskData.shape[2], timesDividableByTwo)
+        min2, max2 = self.getMinMax(min2, max2, maskData.shape[3], timesDividableByTwo)
+        
+        maskData = maskData[:,min0:max0, min1:max1, min2:max2]
+        imgData = imgData[:,min0:max0, min1:max1, min2:max2]
+        
+        self.origins[idx] = tuple(self.origins[idx] + np.asarray([min0, min1, min2]) *  self.spacings[idx])
+        
+        if len(labelData) > 0:
+          labelData = labelData[:,min0:max0, min1:max1, min2:max2]
+      
+      else: 
+        imgData = imgData[:,:int((imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo),:int(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]   
+        
+        if len(labelData) > 0:
+          labelData = labelData[:,:int(labelData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
+    
+    def getMinMax(self, minVal, maxVal, maxLength, timesDividableByTwo):
+      l = maxVal - minVal
+      if l % timesDividableByTwo == 0:
+        return minVal, maxVal
+      else:
+        lNew = (int(l/timesDividableByTwo)+1)*timesDividableByTwo
+        if lNew >= maxLength:
+          minVal = 0
+          maxVal = int((maxLength-1)/timesDividableByTwo)*timesDividableByTwo
+        else:
+          lDiff = lNew - l
+          lDiffHalf = int(lDiff/2)
+          if minVal - lDiffHalf > 0 and maxVal + (lDiff - lDiffHalf) < maxLength:
+            minVal = minVal - lDiffHalf
+            maxVal = maxVal + (lDiff - lDiffHalf)
+          elif minVal - lDiff > 0:
+            minVal = minVal - lDiff
+          elif maxVal + lDiff < maxLength:
+            maxVal = maxVal + lDiff
+          else:
+            minVal = 0
+            maxVal = int((maxLength-1)/timesDividableByTwo)*timesDividableByTwo
+        
+        return minVal, maxVal  
+            
+          
+      
     def __getitem__(self, idx):
         
         ##works currently only for single thread

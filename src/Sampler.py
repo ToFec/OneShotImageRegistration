@@ -1,7 +1,7 @@
 import torch
 from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
 import numpy as np
-from Options import netDepth, netMinPatchSize, receptiveField, usePaddedNet, downSampleRates
+from Options import netDepth, netMinPatchSize, netMinPatchSizePadded, usePaddedNet, downSampleRates
 
 class Sampler(object):
 
@@ -120,15 +120,26 @@ class Sampler(object):
                                 patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].sum() > 0):
             idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
     return idxs 
+  
+  def iterateImg(self, startidx, shift, offset=0):
+    idxs = []
+    for patchIdx0 in range(startidx[0], self.maxIdxs[0], shift[0]):
+      for patchIdx1 in range(startidx[1], self.maxIdxs[1], shift[1]):
+        for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
+          idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
+    return idxs   
             
  
   def getIndicesForUniformSamplingPathShiftNoOverlap(self, patchShift, useMedian=True, offset=0):
     imgShape = self.imgData.shape
 
-    if useMedian:
-      iterateMethod = self.iterateImgMedian
+    if useMedian is not None:
+      if useMedian:
+        iterateMethod = self.iterateImgMedian
+      else:
+        iterateMethod = self.iterateImgSum
     else:
-      iterateMethod = self.iterateImgSum
+      iterateMethod = self.iterateImg
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
        
@@ -227,7 +238,9 @@ class Sampler(object):
     modValue = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
     if not usePaddedNet:
       leftover = leftover + 2*getReceptiveFieldOffset(netDepth)
-    minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
+      minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
+    else:
+      minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
     if minPatchSize % modValue != 0:
       minPatchSize = (int(minPatchSize / modValue) * modValue) +1
     return minPatchSize
