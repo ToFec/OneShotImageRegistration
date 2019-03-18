@@ -7,7 +7,6 @@ import numpy as np
 import Utils
 from eval.LandmarkHandler import PointReader
 import Options
-from itkExtras import spacing
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -121,9 +120,8 @@ class HeadAndNeckDataset(Dataset):
         imgData.append(imgNii)
         
         ## we process the image in the form the form z,y,x but meta data comes as x,y,z
-        self.spacings[idx] = (spacing[2], spacing[1], spacing[0])
-        origin = tmp.GetOrigin()
-        self.origins[idx] = (origin[2], origin[1], origin[0])
+        self.spacings[idx] = self.shiftDimensions(spacing)
+        self.origins[idx] = self.shiftDimensions(tmp.GetOrigin())
         self.directionCosines[idx] = tmp.GetDirection()
         
       imgData = np.stack(imgData).astype('float32')
@@ -177,6 +175,9 @@ class HeadAndNeckDataset(Dataset):
         sample = self.smooth(sample)
       return sample  
     
+    
+    def shiftDimensions(self, vector):
+      return (vector[2], vector[1], vector[0])
     
     def getRightSizedData(self, imgData, maskData, labelData, idx):
       
@@ -259,8 +260,8 @@ class HeadAndNeckDataset(Dataset):
           (imgMean, imgStd) = self.meansAndStds[idx]
           data = data * imgStd
           data = data + imgMean
-        data.SetSpacing( (self.spacings[idx][2],self.spacings[idx][1],self.spacings[idx][0]) )
-        data.SetOrigin( (self.origins[idx][2], self.origins[idx][1], self.origins[idx][0]) )
+        data.SetSpacing( self.shiftDimensions(self.spacings[idx]) )
+        data.SetOrigin( self.shiftDimensions(self.origins[idx]) )
         data.SetDirection(self.directionCosines[idx])
       if not os.path.isdir(path):
         os.makedirs(path)

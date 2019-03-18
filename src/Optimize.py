@@ -312,7 +312,7 @@ class Optimize():
         self.net.train()
         
         currDefField = None
-        netStateDicts = None
+#         netStateDicts = None
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
         
@@ -321,11 +321,11 @@ class Optimize():
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
-          if netStateDicts is None:  
-            netStateDicts = [None for _ in idxs]
-            optimizerStateDicts = [None for _ in idxs]
-          else:
-            netStateDicts, optimizerStateDicts = self.updateStateDicts(netStateDicts, optimizerStateDicts, oldIdxs, idxs)
+#           if netStateDicts is None:  
+#             netStateDicts = [None for _ in idxs]
+#             optimizerStateDicts = [None for _ in idxs]
+#           else:
+#             netStateDicts, optimizerStateDicts = self.updateStateDicts(netStateDicts, optimizerStateDicts, oldIdxs, idxs)
           
           print('idxs: ', idxs)
 
@@ -339,10 +339,10 @@ class Optimize():
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
               
-              if netStateDicts[patchIdx] is not None:
-                stateDict = netStateDicts[patchIdx]
-                optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
-                self.net.load_state_dict(stateDict)
+#               if netStateDicts[patchIdx] is not None:
+#                 stateDict = netStateDicts[patchIdx]
+#                 optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
+#                 self.net.load_state_dict(stateDict)
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
@@ -359,8 +359,8 @@ class Optimize():
                   self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
-                    netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
-                    optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
+#                     netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
+#                     optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
                     break
                 else:
                   lossCounter+=1

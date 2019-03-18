@@ -26,9 +26,12 @@ cumulativeLossTollerance=100#0.001
 if test:
   ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
-  boundarySmoothnessW=(0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
-  smoothW = (0.001,0.001,0.001,0.001,0.001,0.001)
-  lossTollerances=(0.00001,0.00001)
+  #boundarySmoothnessW=(0.0, 10.0, 0.0, 10.0, 0.0, 10.0)
+  boundarySmoothnessW=(0.0, 1.0, 1.0)
+  smoothW = (0.001,0.001,0.001)
+  #smoothW = (0.001,0.001,0.001,0.001,0.001,0.001)
+  #lossTollerances=(0.00001,0.00001)
+  lossTollerances=(0.00001,)
 else:
   ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
