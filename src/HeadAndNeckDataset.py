@@ -7,6 +7,7 @@ import numpy as np
 import Utils
 from eval.LandmarkHandler import PointReader
 import Options
+from itkExtras import spacing
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -118,8 +119,11 @@ class HeadAndNeckDataset(Dataset):
           imgSize = currImgSize
           
         imgData.append(imgNii)
-        self.spacings[idx] = spacing
-        self.origins[idx] = tmp.GetOrigin()
+        
+        ## we process the image in the form the form z,y,x but meta data comes as x,y,z
+        self.spacings[idx] = (spacing[2], spacing[1], spacing[0])
+        origin = tmp.GetOrigin()
+        self.origins[idx] = (origin[2], origin[1], origin[0])
         self.directionCosines[idx] = tmp.GetDirection()
         
       imgData = np.stack(imgData).astype('float32')
@@ -173,6 +177,7 @@ class HeadAndNeckDataset(Dataset):
         sample = self.smooth(sample)
       return sample  
     
+    
     def getRightSizedData(self, imgData, maskData, labelData, idx):
       
       nuOfDownSampleLayers = Options.netDepth - 1
@@ -183,13 +188,13 @@ class HeadAndNeckDataset(Dataset):
         maskChanSum = np.sum(maskData,0)
         minMaxXYZ = np.nonzero(maskChanSum)
         min0 = minMaxXYZ[0].min()
-        max0 = minMaxXYZ[0].max()
+        max0 = minMaxXYZ[0].max() + 1
         
         min1 = minMaxXYZ[1].min()
-        max1 = minMaxXYZ[1].max()
+        max1 = minMaxXYZ[1].max() + 1
         
         min2 = minMaxXYZ[2].min()
-        max2 = minMaxXYZ[2].max()
+        max2 = minMaxXYZ[2].max() + 1
         
         min0, max0 = self.getMinMax(min0, max0, maskData.shape[1], timesDividableByTwo)
         min1, max1 = self.getMinMax(min1, max1, maskData.shape[2], timesDividableByTwo)
@@ -217,9 +222,9 @@ class HeadAndNeckDataset(Dataset):
         return minVal, maxVal
       else:
         lNew = (int(l/timesDividableByTwo)+1)*timesDividableByTwo
-        if lNew >= maxLength:
+        if lNew > maxLength:
           minVal = 0
-          maxVal = int((maxLength-1)/timesDividableByTwo)*timesDividableByTwo
+          maxVal = int((maxLength)/timesDividableByTwo)*timesDividableByTwo
         else:
           lDiff = lNew - l
           lDiffHalf = int(lDiff/2)
@@ -228,11 +233,11 @@ class HeadAndNeckDataset(Dataset):
             maxVal = maxVal + (lDiff - lDiffHalf)
           elif minVal - lDiff > 0:
             minVal = minVal - lDiff
-          elif maxVal + lDiff < maxLength:
+          elif maxVal + lDiff <= maxLength:
             maxVal = maxVal + lDiff
           else:
             minVal = 0
-            maxVal = int((maxLength-1)/timesDividableByTwo)*timesDividableByTwo
+            maxVal = int((maxLength)/timesDividableByTwo)*timesDividableByTwo
         
         return minVal, maxVal  
             
@@ -254,8 +259,8 @@ class HeadAndNeckDataset(Dataset):
           (imgMean, imgStd) = self.meansAndStds[idx]
           data = data * imgStd
           data = data + imgMean
-        data.SetSpacing(self.spacings[idx])
-        data.SetOrigin(self.origins[idx])
+        data.SetSpacing( (self.spacings[idx][2],self.spacings[idx][1],self.spacings[idx][0]) )
+        data.SetOrigin( (self.origins[idx][2], self.origins[idx][1], self.origins[idx][0]) )
         data.SetDirection(self.directionCosines[idx])
       if not os.path.isdir(path):
         os.makedirs(path)

@@ -13,7 +13,7 @@ class PointReader():
     if file_extension == '.fcsv':#slicer datasets
       for line in pointFile:
         pointsStr = line.split(',')
-        point = (np.float32(pointsStr[1]), np.float32(pointsStr[2]), np.float32(pointsStr[3]))
+        point = (np.float32(pointsStr[1])*-1, np.float32(pointsStr[2])*-1, np.float32(pointsStr[3]))
         currPoints.append(point)      
     elif file_extension == '.pts':#popi datasets
       for line in pointFile:
@@ -272,7 +272,7 @@ class PointProcessor():
   
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert' ])
+    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert', 'deformPoints' ])
   except getopt.GetoptError as e:#python3
     print(e)
     return
@@ -283,6 +283,8 @@ def main(argv):
   calcDiff = False
   correctPos = False  
   convertPoints = False
+  deformPoints = False
+  referenceImg = 0
   for opt, arg in opts:
     if opt == '--path0':
       filepath0 = arg
@@ -296,6 +298,8 @@ def main(argv):
       outputPath = arg
     elif opt == '--convert':
       convertPoints = True
+    elif opt == '--deformPoints':
+      deformPoints = True    
     elif opt == '--refImg':
       referenceImg = arg    
         
@@ -313,7 +317,8 @@ def main(argv):
       
     logFile.close()
       
-      
+  elif(deformPoints): ##ATTENTION: the def field points from output to input therefore we need no take the target landmarks and deform them
+    pointProcessor.deformPoints(filepath0, filepath1, referenceImg)    
   else:
     pointProcessor.convertToFcsv(filepath0)
   

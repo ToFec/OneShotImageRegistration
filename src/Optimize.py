@@ -109,7 +109,11 @@ class Optimize():
           defField = np.moveaxis(defField, 0, 1)
           defField = torch.from_numpy(defField)
           currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
-          deformedPoints = pp.deformPointsWithField(currLandmarks, defField, dataloader.dataset.origins[datasetIdx], dataloader.dataset.spacings[datasetIdx], dataloader.dataset.directionCosines[datasetIdx])
+          
+          defFieldOrigin = (dataloader.dataset.origins[datasetIdx][2],dataloader.dataset.origins[datasetIdx][1],dataloader.dataset.origins[datasetIdx][0])
+          defFieldSpacing = (dataloader.dataset.spacings[datasetIdx][2],dataloader.dataset.spacings[datasetIdx][1],dataloader.dataset.spacings[datasetIdx][0])
+          
+          deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, defFieldSpacing, dataloader.dataset.directionCosines[datasetIdx])
           pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
   def save_grad(self, name):
@@ -308,7 +312,7 @@ class Optimize():
         self.net.train()
         
         currDefField = None
-        
+        netStateDicts = None
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
         
@@ -316,17 +320,29 @@ class Optimize():
           sampledImgData = sampledImgData.to(self.userOpts.device)
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+          
+          if netStateDicts is None:  
+            netStateDicts = [None for _ in idxs]
+            optimizerStateDicts = [None for _ in idxs]
+          else:
+            netStateDicts, optimizerStateDicts = self.updateStateDicts(netStateDicts, optimizerStateDicts, oldIdxs, idxs)
+          
           print('idxs: ', idxs)
 
           if currDefField is None:
             currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
           
-          for _, lossTollerance in enumerate(self.userOpts.lossTollerances):
+          for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
           
             lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+              
+              if netStateDicts[patchIdx] is not None:
+                stateDict = netStateDicts[patchIdx]
+                optimizer.load_state_dict( optimizerStateDicts[patchIdx] )
+                self.net.load_state_dict(stateDict)
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
@@ -335,7 +351,7 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx)
+                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
@@ -343,6 +359,8 @@ class Optimize():
                   self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
+                    netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
+                    optimizerStateDicts[patchIdx] = copy.deepcopy(optimizer.state_dict())
                     break
                 else:
                   lossCounter+=1
@@ -359,6 +377,10 @@ class Optimize():
               tmpField = tmpField * upSampleRate
               tmpField = sampleImg(tmpField, upSampleRate)
           
+          oldIdxs = idxs
+          
+          print(dataloader.dataset.spacings[0])
+          print(tmpField.shape)
           defX = tmpField[0, 0 * 3, ].detach() * dataloader.dataset.spacings[0][0] * dataloader.dataset.directionCosines[0][0]
           defY = tmpField[0, 0 * 3 + 1, ].detach() * dataloader.dataset.spacings[0][1] * dataloader.dataset.directionCosines[0][4]
           defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataloader.dataset.spacings[0][2] * dataloader.dataset.directionCosines[0][8]
