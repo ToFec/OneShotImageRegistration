@@ -120,8 +120,8 @@ class HeadAndNeckDataset(Dataset):
         imgData.append(imgNii)
         
         ## we process the image in the form the form z,y,x but meta data comes as x,y,z
-        self.spacings[idx] = self.shiftDimensions(spacing)
-        self.origins[idx] = self.shiftDimensions(tmp.GetOrigin())
+        self.spacings[idx] = spacing
+        self.origins[idx] = tmp.GetOrigin()
         self.directionCosines[idx] = tmp.GetDirection()
         
       imgData = np.stack(imgData).astype('float32')
@@ -176,8 +176,20 @@ class HeadAndNeckDataset(Dataset):
       return sample  
     
     
-    def shiftDimensions(self, vector):
-      return (vector[2], vector[1], vector[0])
+    def getSpacing(self, idx):
+      return self.spacings[idx]
+    
+    def getSpacingXZFlip(self, idx):
+      return (self.spacings[idx][2],self.spacings[idx][1],self.spacings[idx][0])
+
+    def getOrigin(self, idx):
+      return self.origins[idx]
+    
+    def getOriginXZFlip(self, idx):
+      return (self.origins[idx][2],self.origins[idx][1],self.origins[idx][0])
+    
+    def getDirectionCosines(self, idx):
+      return self.directionCosines[idx]
     
     def getRightSizedData(self, imgData, maskData, labelData, idx):
       
@@ -204,7 +216,8 @@ class HeadAndNeckDataset(Dataset):
         maskData = maskData[:,min0:max0, min1:max1, min2:max2]
         imgData = imgData[:,min0:max0, min1:max1, min2:max2]
         
-        self.origins[idx] = tuple(self.origins[idx] + np.asarray([min0, min1, min2]) *  self.spacings[idx])
+        #self.origins[idx] = tuple(self.origins[idx] + np.asarray([min0, min1, min2]) *  self.spacings[idx])
+        self.origins[idx] = tuple(self.origins[idx] + np.asarray([min2, min1, min0]) *  self.spacings[idx])
         
         if len(labelData) > 0:
           labelData = labelData[:,min0:max0, min1:max1, min2:max2]
@@ -260,8 +273,8 @@ class HeadAndNeckDataset(Dataset):
           (imgMean, imgStd) = self.meansAndStds[idx]
           data = data * imgStd
           data = data + imgMean
-        data.SetSpacing( self.shiftDimensions(self.spacings[idx]) )
-        data.SetOrigin( self.shiftDimensions(self.origins[idx]) )
+        data.SetSpacing( self.getSpacing(idx) )
+        data.SetOrigin( self.getOrigin(idx) )
         data.SetDirection(self.directionCosines[idx])
       if not os.path.isdir(path):
         os.makedirs(path)

@@ -96,9 +96,11 @@ class Optimize():
         dataloader.dataset.saveData(imgDataDef, self.userOpts.outputPath, 'deformedImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         #deformation calculated for idx coordinates; transform to world coordinates
-        defX = defFields[imgIdx, chanIdx * 3, ].detach() * dataloader.dataset.spacings[datasetIdx][0] * dataloader.dataset.directionCosines[datasetIdx][0]
-        defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * dataloader.dataset.spacings[datasetIdx][1] * dataloader.dataset.directionCosines[datasetIdx][4]
-        defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * dataloader.dataset.spacings[datasetIdx][2] * dataloader.dataset.directionCosines[datasetIdx][8]
+        dataSetSpacing = dataloader.dataset.getSpacing(datasetIdx)
+        dataSetDirCosines = dataloader.dataset.getDirectionCosines(datasetIdx)
+        defX = defFields[imgIdx, chanIdx * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+        defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+        defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
         defField = getDefField(defX, defY, defZ)
         defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
         dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
@@ -110,10 +112,9 @@ class Optimize():
           defField = torch.from_numpy(defField)
           currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
           
-          defFieldOrigin = (dataloader.dataset.origins[datasetIdx][2],dataloader.dataset.origins[datasetIdx][1],dataloader.dataset.origins[datasetIdx][0])
-          defFieldSpacing = (dataloader.dataset.spacings[datasetIdx][2],dataloader.dataset.spacings[datasetIdx][1],dataloader.dataset.spacings[datasetIdx][0])
+          defFieldOrigin = dataloader.dataset.getOrigin(datasetIdx)
           
-          deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, defFieldSpacing, dataloader.dataset.directionCosines[datasetIdx])
+          deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
           pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
   def save_grad(self, name):
@@ -185,7 +186,7 @@ class Optimize():
         firstRun = True
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           imgData, maskData, labelData, landmarkData = sampleImgData(data, samplingRate)
-          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
+          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
           if firstRun:
             defFields = torch.zeros((imgData.shape[0], imgData.shape[1] * 3, imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)
           indexArray = torch.zeros((imgData.shape[2], imgData.shape[3], imgData.shape[4]), device=self.userOpts.device, requires_grad=False)          
@@ -299,7 +300,7 @@ class Optimize():
       
       for i, data in enumerate(dataloader, 0):
         
-        netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
+        netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
         
         samplerShift = (0,0,0)
         if not self.userOpts.usePaddedNet:
@@ -379,14 +380,21 @@ class Optimize():
           
           oldIdxs = idxs
           
-          print(dataloader.dataset.spacings[0])
-          print(tmpField.shape)
-          defX = tmpField[0, 0 * 3, ].detach() * dataloader.dataset.spacings[0][0] * dataloader.dataset.directionCosines[0][0]
-          defY = tmpField[0, 0 * 3 + 1, ].detach() * dataloader.dataset.spacings[0][1] * dataloader.dataset.directionCosines[0][4]
-          defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataloader.dataset.spacings[0][2] * dataloader.dataset.directionCosines[0][8]
+          dataSetSpacing = dataloader.dataset.getSpacing(0)
+          dataSetDirCosines = dataloader.dataset.getDirectionCosines(0)
+          defX = tmpField[0, 0 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+          defY = tmpField[0, 0 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+          defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
           defField = getDefField(defX, defY, defZ)
           defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
           dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'singleDefField' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
+
+          defX = tmpField[0, 0 * 3, ].detach()
+          defY = tmpField[0, 0 * 3 + 1, ].detach()
+          defZ = tmpField[0, 0 * 3 + 2, ].detach()
+          defField = getDefField(defX, defY, defZ)
+          defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
+          dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'singleDefFieldNOSpacing' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
               
         if not self.userOpts.usePaddedNet:
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
@@ -426,7 +434,7 @@ class Optimize():
           imgData = data['image']
           labelData = data['label']
           maskData = data['mask']
-          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.spacings[i], optimizer, self.userOpts)
+          netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
           imgData = imgData.to(self.userOpts.device)
           sampler = Sampler(maskData, imgData, labelData, imgPatchSize)
           
