@@ -115,7 +115,7 @@ class Optimize():
           defFieldOrigin = dataloader.dataset.getOrigin(datasetIdx)
           
           deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
-          pr.saveData(self.userOpts.outputPath + os.path.sep + str(chanIdx+1) + '0deformed.pts', deformedPoints)
+          pr.saveData(self.userOpts.outputPath + os.path.sep + 'dataset' + str(datasetIdx) + 'channel' + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
   def save_grad(self, name):
   
@@ -131,7 +131,7 @@ class Optimize():
     print(torch.cuda.memory_allocated())
   
   def terminateLoopByLoss(self, loss, meanLoss, currIteration, itThreshold, iterIdx, tollerance):
-    if (meanLoss - loss < tollerance):
+    if (torch.abs(meanLoss - loss) < tollerance):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
@@ -139,7 +139,7 @@ class Optimize():
       return False
     
   def terminateLoopByLossAndItCount(self, loss, meanLoss, currIteration, itThreshold, iterIdx, tollerance):
-    if (meanLoss - loss < tollerance) or (currIteration >= itThreshold):
+    if (torch.abs(meanLoss - loss) < tollerance) or (currIteration >= itThreshold):
       self.finalLoss = loss
       self.finalNumberIterations[iterIdx] = currIteration
       return True
@@ -380,22 +380,6 @@ class Optimize():
           
           oldIdxs = idxs
           
-          dataSetSpacing = dataloader.dataset.getSpacing(0)
-          dataSetDirCosines = dataloader.dataset.getDirectionCosines(0)
-          defX = tmpField[0, 0 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
-          defY = tmpField[0, 0 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
-          defZ = tmpField[0, 0 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
-          defField = getDefField(defX, defY, defZ)
-          defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-          dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'singleDefField' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
-
-          defX = tmpField[0, 0 * 3, ].detach()
-          defY = tmpField[0, 0 * 3 + 1, ].detach()
-          defZ = tmpField[0, 0 * 3 + 2, ].detach()
-          defField = getDefField(defX, defY, defZ)
-          defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-          dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'singleDefFieldNOSpacing' + str(samplingRateIdx) + 'image' + str(samplingRateIdx) + 'channel' + str(samplingRateIdx) + '.nrrd', 00, False)
-              
         if not self.userOpts.usePaddedNet:
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         

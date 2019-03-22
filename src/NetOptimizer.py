@@ -55,15 +55,12 @@ class NetOptimizer(object):
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
     
-#     zeroDefField = getZeroDefField(imgDataToWork.shape, self.userOpts.device)
-    
-    
+    zeroDefField = Utils.getZeroDefField(imgDataToWork.shape, self.userOpts.device)
     imgDataDef = torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)
+    cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
     
-#     cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
-    
-    #         cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
-   # cycleIdxData = zeroDefField.clone()
+#     cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
+    cycleIdxData = zeroDefField.clone()
     
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
@@ -71,23 +68,19 @@ class NetOptimizer(object):
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-#       cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
-#                   
-#       cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
-#       cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
-#       cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
-#     
-#     del zeroDefField, cycleIdxData
+      cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
+                   
+      cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
+      cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
+      cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
+     
+    del cycleIdxData
           
     crossCorr = lossCalculator.normCrossCorr(imgDataDef)
-#     
-#     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
-#     loss = self.userOpts.ccW * crossCorr + self.userOpts.smoothW * smoothnessDF + self.userOpts.cycleW * cycleLoss
-    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF
-#     print('cc: %.5f smmothness: %.5f' % (crossCorr, smoothnessDF))
-    #print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
-#     print('cc: %.5f smmothnessW: %.5f vecLengthW: %.5f cycleLossW: %.5f' % (self.userOpts.ccW, self.userOpts.smoothW, self.userOpts.vecLengthW, self.userOpts.cycleW))
-#     print('loss: %.3f' % (loss))
+    cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
+
+    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
+#     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
       
     loss.backward()
     self.optimizer.step()

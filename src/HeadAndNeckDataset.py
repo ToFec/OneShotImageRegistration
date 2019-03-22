@@ -126,8 +126,8 @@ class HeadAndNeckDataset(Dataset):
         
       imgData = np.stack(imgData).astype('float32')
       
-      imgData[imgData < -1000] = -1000
-      imgData[imgData > 100] = 100
+#       imgData[imgData < -1000] = -1000
+#       imgData[imgData > 100] = 100
       
       labelData = []
       if (len(trainingFileNames) == len(labelsFileNames)):
