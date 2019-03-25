@@ -2,6 +2,7 @@ import sys, getopt, os
 import SimpleITK as sitk
 import numpy as np
 from math import sqrt
+import torch
 from fileinput import filename
 
 class PointReader():
@@ -29,8 +30,19 @@ class PointReader():
   
   def saveData(self, filename, points, seperator=' '):
     pointFile = open(filename,'w') 
+    if type(points[0][0]) is torch.Tensor:
+      for point in points:
+        pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n')
+    else:
+      for point in points:
+        pointFile.write(str(point[0]) + seperator + str(point[1]) + seperator + str(point[2]) + '\n')
+      
+    pointFile.close()
+    
+  def saveData2(self, filename, points, seperator=' '):
+    pointFile = open(filename,'w') 
     for point in points:
-      pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n') ##little hack to print torch tensors and numpy values
+      pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n')
     pointFile.close()
 
   def saveDataFcsv(self, filename, points):
@@ -144,7 +156,7 @@ class PointProcessor():
     
     newPoints = self.deformPointsWithField(points, defField, defFieldOrigin, defFieldSpacing, defFieldDirection)
     filename, file_extension = os.path.splitext(filePath)  
-    pr.saveDataFcsv(filename + 'deformed.fcsv', newPoints)
+    pr.saveData(filename + 'deformed.pts', newPoints)
   
   def deformPointsWithField(self, points, defField, defFieldOrigin, defFieldSpacing, direction):
     
