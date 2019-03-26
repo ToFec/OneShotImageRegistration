@@ -28,23 +28,18 @@ class PointReader():
         currPoints.append(point)
     return currPoints
   
-  def saveData(self, filename, points, seperator=' '):
-    pointFile = open(filename,'w') 
-    if type(points[0][0]) is torch.Tensor:
-      for point in points:
-        pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n')
-    else:
-      for point in points:
-        pointFile.write(str(point[0]) + seperator + str(point[1]) + seperator + str(point[2]) + '\n')
-      
-    pointFile.close()
-    
-  def saveData2(self, filename, points, seperator=' '):
-    pointFile = open(filename,'w') 
+  def saveDataTensor(self, filename, points, seperator=' '):
+    pointFile = open(filename,'w')
     for point in points:
       pointFile.write(str(np.float32(point[0])[0]) + seperator + str(np.float32(point[1])[0]) + seperator + str(np.float32(point[2])[0]) + '\n')
     pointFile.close()
-
+    
+  def saveDataList(self, filename, points, seperator=' '):
+    pointFile = open(filename,'w')
+    for point in points:
+      pointFile.write(str(point[0]) + seperator + str(point[1]) + seperator + str(point[2]) + '\n')
+    pointFile.close()
+    
   def saveDataFcsv(self, filename, points):
     pointFile = open(filename,'w')
     i = 0 
@@ -156,7 +151,7 @@ class PointProcessor():
     
     newPoints = self.deformPointsWithField(points, defField, defFieldOrigin, defFieldSpacing, defFieldDirection)
     filename, file_extension = os.path.splitext(filePath)  
-    pr.saveData(filename + 'deformed.pts', newPoints)
+    pr.saveDataList(filename + 'deformed.pts', newPoints)
   
   def deformPointsWithField(self, points, defField, defFieldOrigin, defFieldSpacing, direction):
     
@@ -241,11 +236,11 @@ class PointProcessor():
     if '.pts' in filename:
       newPoints = self.convertPtsToTxt(filename, referenceImg)
       fileNameNew = filePathName + '.txt'
-      pr.saveData(fileNameNew, newPoints, '\t')
+      pr.saveDataList(fileNameNew, newPoints, '\t')
     elif '.txt' in filename:
       newPoints = self.convertTxtToPts(filename, referenceImg)
       fileNameNew = filePathName + '.pts'
-      pr.saveData(fileNameNew, newPoints)
+      pr.saveDataList(fileNameNew, newPoints)
     else:
       return
   
@@ -274,7 +269,7 @@ class PointProcessor():
             for point in points:
               newPoint = ([point[0]], [point[1] + offset], [point[2]])
               newPoints.append(newPoint)
-          pr.saveData(filepath + os.path.sep + str(i) + '00.pts', newPoints)
+          pr.saveDataList(filepath + os.path.sep + str(i) + '00.pts', newPoints)
           pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '00.fcsv', newPoints)
         else:
           break
