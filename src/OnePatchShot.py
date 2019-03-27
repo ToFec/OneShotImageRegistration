@@ -63,7 +63,7 @@ def main(argv):
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(net, dataloader, userOpts))
+        p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
         p.start()
         processes.append(p)
       for p in processes:
@@ -72,7 +72,7 @@ def main(argv):
     else:
       trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
     end = time.time()
-    print('Registration took:', end - start, 'seconds')
+    print('Registration took overall:', end - start, 'seconds')
     
 
 if __name__ == "__main__":

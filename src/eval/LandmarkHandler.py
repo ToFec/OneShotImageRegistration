@@ -236,11 +236,11 @@ class PointProcessor():
     if '.pts' in filename:
       newPoints = self.convertPtsToTxt(filename, referenceImg)
       fileNameNew = filePathName + '.txt'
-      pr.saveDataList(fileNameNew, newPoints, '\t')
+      pr.saveDataTensor(fileNameNew, newPoints, '\t')
     elif '.txt' in filename:
       newPoints = self.convertTxtToPts(filename, referenceImg)
       fileNameNew = filePathName + '.pts'
-      pr.saveDataList(fileNameNew, newPoints)
+      pr.saveDataTensor(fileNameNew, newPoints)
     else:
       return
   
@@ -269,7 +269,7 @@ class PointProcessor():
             for point in points:
               newPoint = ([point[0]], [point[1] + offset], [point[2]])
               newPoints.append(newPoint)
-          pr.saveDataList(filepath + os.path.sep + str(i) + '00.pts', newPoints)
+          pr.saveDataTensor(filepath + os.path.sep + str(i) + '00.pts', newPoints)
           pr.saveDataFcsvSlicer(filepath + os.path.sep + str(i) + '00.fcsv', newPoints)
         else:
           break
@@ -318,10 +318,10 @@ def main(argv):
   elif(calcDiff):
     distances = pointProcessor.calculatePointDistance(filepath0, filepath1)
     logfile = outputPath + os.path.sep + 'distances.csv'    
-    logFile = open(logfile,'w', buffering=0)
+    logFile = open(logfile,'a', buffering=0)
     for dist in distances:
       logFile.write(str(dist) + ';')
-      
+    logFile.write('\n')  
     logFile.close()
       
   elif(deformPoints): ##ATTENTION: the def field points from output to input therefore we need no take the target landmarks and deform them

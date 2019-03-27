@@ -12,6 +12,7 @@ from eval.LandmarkHandler import PointProcessor, PointReader
 import NetOptimizer
 from Sampler import Sampler
 
+import time
 import os
 
 
@@ -288,7 +289,6 @@ class Optimize():
         self.saveResults(imgData, landmarkData, defFields, dataloader, i)
    
   def trainTestNetDownSamplePatch(self, dataloader):
-      optimizer = optim.Adam(self.net.parameters())
       if self.userOpts.trainTillConvergence:
         iterationValidation = self.terminateLoopByLossAndItCount
       else:
@@ -299,7 +299,12 @@ class Optimize():
       receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
       
       for i, data in enumerate(dataloader, 0):
+        torch.manual_seed(0)
+        np.random.seed(0)
+        self.net.reset_params()
+        optimizer = optim.Adam(self.net.parameters())
         
+        start = time.time()
         netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
         
         samplerShift = (0,0,0)
@@ -380,6 +385,8 @@ class Optimize():
           
           oldIdxs = idxs
           
+        end = time.time()
+        print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         if not self.userOpts.usePaddedNet:
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
