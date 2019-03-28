@@ -44,6 +44,12 @@ def getZeroDefField(imagShape, device):
     
   return Context.zeroDefField
 
+def getZeroIdxField(imagShape, device):
+  if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices.shape):
+    zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]]) )
+    Context.zeroIndices = zeroIndices.to(device)
+  return Context.zeroIndices
+
 def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
     smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)
     padVal = int(kernelSize / 2)
@@ -207,3 +213,10 @@ def getPaddedData(imgData, maskData, labelData, padVals):
     labelData = labelData.byte()
     
   return (imgData, maskData, labelData)
+
+def save_grad(name):
+  
+  def hook(grad):
+      print(name, np.float64(torch.sum(grad)))
+
+  return hook

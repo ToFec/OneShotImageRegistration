@@ -2,6 +2,7 @@
 import Utils
 import torch
 import LossFunctions as lf
+import numpy as np
 
 class NetOptimizer(object):
 
@@ -55,31 +56,50 @@ class NetOptimizer(object):
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
     
-    zeroDefField = Utils.getZeroDefField(imgDataToWork.shape, self.userOpts.device)
+    #zeroDefField = Utils.getZeroDefField(imgDataToWork.shape, self.userOpts.device)
+    
     imgDataDef = torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)
     cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
     
-#     cycleIdxData = torch.empty((imgData.shape[0:2]) + zeroDefField.shape[1:], device=device)
-    cycleIdxData = zeroDefField.clone()
+#     cycleIdxData = zeroDefField.clone()
     
+    zeroIndices = torch.from_numpy( np.indices([imgDataToWork.shape[0],3,imgDataToWork.shape[2],imgDataToWork.shape[3],imgDataToWork.shape[4]]) )
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-      cycleImgData[:, chanRange, ] = torch.nn.functional.grid_sample(defFields[:, chanRange, ], cycleIdxData.clone(), mode='bilinear', padding_mode='border')
+      cycleImgData[:,chanRange, ] = defFields[zeroIndices[0],zeroIndices[1],zeroIndices[2], zeroIndices[3], zeroIndices[4]]
+      zeroIndices[1] += 3
+      
+      ##take care of def vec order !!!
+      zeroIndices[2] += defFields[:,0,].detach()
+      zeroIndices[2][zeroIndices[2] > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1
+      
+      zeroIndices[3] += defFields[:,1,].detach()
+      zeroIndices[3][zeroIndices[3] > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1
+      
+      zeroIndices[4] += defFields[:,3,].detach()
+      zeroIndices[4][zeroIndices[4] > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1  
+       
+#       cycleImgData[:,chanRange, ] = torch.nn.functional.grid_sample(defFields[:,chanRange, ], cycleIdxData, mode='bilinear', padding_mode='border')
                    
-      cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / (imgToDef.shape[2] / 2)
-      cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / (imgToDef.shape[3] / 2)
-      cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / (imgToDef.shape[4] / 2)
-     
-    del cycleIdxData
-          
+#       cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / ((imgToDef.shape[4]-1) / 2.0)
+#       cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / ((imgToDef.shape[3]-1) / 2.0)
+#       cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / ((imgToDef.shape[2]-1) / 2.0)
+    
+#     del cycleIdxData
+    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
-
-    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
+    
+    print('cycleLoss', np.float64(cycleLoss))
+    defFields.register_hook(Utils.save_grad('defFields'))
+    cycleImgData.register_hook(Utils.save_grad('cycleImgData'))
+    
+    loss = cycleLoss
+    #loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
       

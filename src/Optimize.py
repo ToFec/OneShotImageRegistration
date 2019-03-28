@@ -118,15 +118,6 @@ class Optimize():
           deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
           pr.saveDataTensor(self.userOpts.outputPath + os.path.sep + 'dataset' + str(datasetIdx) + 'channel' + str(chanIdx+1) + '0deformed.pts', deformedPoints)
             
-  def save_grad(self, name):
-  
-      def hook(grad):
-          print(name)
-          print(torch.sum(grad))
-  
-      return hook
-  
-    
   def printGPUMemoryAllocated(self):
     torch.cuda.synchronize()
     print(torch.cuda.memory_allocated())
@@ -300,6 +291,7 @@ class Optimize():
       
       for i, data in enumerate(dataloader, 0):
         torch.manual_seed(0)
+        torch.cuda.manual_seed(0)
         np.random.seed(0)
         self.net.reset_params()
         optimizer = optim.Adam(self.net.parameters())
