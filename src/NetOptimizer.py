@@ -74,14 +74,14 @@ class NetOptimizer(object):
       zeroIndices[1] += 3
       
       ##take care of def vec order !!!
-      zeroIndices[2] += defFields[:,0,].detach()
-      zeroIndices[2][zeroIndices[2] > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1
-      
-      zeroIndices[3] += defFields[:,1,].detach()
-      zeroIndices[3][zeroIndices[3] > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1
-      
-      zeroIndices[4] += defFields[:,3,].detach()
-      zeroIndices[4][zeroIndices[4] > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1  
+#       zeroIndices[2] += defFields[:,0,].detach()
+#       zeroIndices[2][zeroIndices[2] > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1
+#       
+#       zeroIndices[3] += defFields[:,1,].detach()
+#       zeroIndices[3][zeroIndices[3] > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1
+#       
+#       zeroIndices[4] += defFields[:,3,].detach()
+#       zeroIndices[4][zeroIndices[4] > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1  
        
 #       cycleImgData[:,chanRange, ] = torch.nn.functional.grid_sample(defFields[:,chanRange, ], cycleIdxData, mode='bilinear', padding_mode='border')
                    
