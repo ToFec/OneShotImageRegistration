@@ -16,6 +16,60 @@ class NetOptimizer(object):
     weightSum = ccW + sW + cyW
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
             
+
+  def cycleLossCalculations(self, zeroIndices, cycleImgData, defFields, imgDataShape, chanRange):
+    
+    fieldsLow4 = zeroIndices[4].long()
+    partHigh4 = zeroIndices[4] - fieldsLow4.float()
+    partLow4 = 1.0 - partHigh4
+    fieldsHigh4 = fieldsLow4 + 1
+    fieldsHigh4[fieldsHigh4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
+    fieldsLow4[fieldsLow4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1      
+    
+    fieldsLow3 = zeroIndices[3].long()
+    partHigh3 = zeroIndices[3] - fieldsLow3.float()
+    partLow3 = 1.0 - partHigh3
+    fieldsHigh3 = fieldsLow3 + 1
+    fieldsHigh3[fieldsHigh3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1
+    fieldsLow3[fieldsLow3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1  
+    
+    fieldsLow2 = zeroIndices[2].long()
+    partHigh2 = zeroIndices[2] - fieldsLow2.float()
+    partLow2 = 1.0 - partHigh2
+    fieldsHigh2 = fieldsLow2 + 1
+    fieldsHigh2[fieldsHigh2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1
+    fieldsLow2[fieldsLow2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1  
+    
+    fields0 = zeroIndices[0].long()
+    fields1 = zeroIndices[1].long()
+    
+    cycleImgData[:,chanRange, ] = partLow2 * partLow3 * partLow4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsLow4] + \
+    partLow2 * partLow3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsHigh4] + \
+    partLow2 * partHigh3 * partLow4 * defFields[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsLow4] + \
+    partHigh2 * partLow3 * partLow4 * defFields[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsLow4] + \
+    partHigh2 * partHigh3 * partLow4 * defFields[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsLow4] + \
+    partHigh2 * partLow3 * partHigh4 * defFields[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsHigh4] + \
+    partLow2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsHigh4] + \
+    partHigh2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsHigh4]
+    
+    zeroIndices[1] += 3.0
+    
+    ##take care of def vec order !!!
+    tmpField = cycleImgData[:,None,chanRange[2],].detach()
+    zeroIndices[2][:,None,0,] += tmpField
+    zeroIndices[2][:,None,1,] += tmpField
+    zeroIndices[2][:,None,2,] += tmpField
+    
+    tmpField = cycleImgData[:,None,chanRange[1],].detach()
+    zeroIndices[3][:,None,0,] += tmpField
+    zeroIndices[3][:,None,1,] += tmpField
+    zeroIndices[3][:,None,2,] += tmpField
+    
+    tmpField = cycleImgData[:,None,chanRange[0],].detach()
+    zeroIndices[4][:,None,0,] += tmpField
+    zeroIndices[4][:,None,1,] += tmpField
+    zeroIndices[4][:,None,2,] += tmpField 
+            
   def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0):
     
     # zero the parameter gradients
@@ -63,43 +117,20 @@ class NetOptimizer(object):
     
 #     cycleIdxData = zeroDefField.clone()
     
-    zeroIndices = torch.from_numpy( np.indices([imgDataToWork.shape[0],3,imgDataToWork.shape[2],imgDataToWork.shape[3],imgDataToWork.shape[4]]) )
+    zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, self.userOpts.device).clone()
+    
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-      cycleImgData[:,chanRange, ] = defFields[zeroIndices[0],zeroIndices[1],zeroIndices[2], zeroIndices[3], zeroIndices[4]]
-      zeroIndices[1] += 3
+      self.cycleLossCalculations(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
       
-      ##take care of def vec order !!!
-#       zeroIndices[2] += defFields[:,0,].detach()
-#       zeroIndices[2][zeroIndices[2] > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1
-#       
-#       zeroIndices[3] += defFields[:,1,].detach()
-#       zeroIndices[3][zeroIndices[3] > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1
-#       
-#       zeroIndices[4] += defFields[:,3,].detach()
-#       zeroIndices[4][zeroIndices[4] > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1  
-       
-#       cycleImgData[:,chanRange, ] = torch.nn.functional.grid_sample(defFields[:,chanRange, ], cycleIdxData, mode='bilinear', padding_mode='border')
-                   
-#       cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / ((imgToDef.shape[4]-1) / 2.0)
-#       cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / ((imgToDef.shape[3]-1) / 2.0)
-#       cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / ((imgToDef.shape[2]-1) / 2.0)
-    
-#     del cycleIdxData
-    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
-    print('cycleLoss', np.float64(cycleLoss))
-    defFields.register_hook(Utils.save_grad('defFields'))
-    cycleImgData.register_hook(Utils.save_grad('cycleImgData'))
-    
-    loss = cycleLoss
-    #loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
+    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
       

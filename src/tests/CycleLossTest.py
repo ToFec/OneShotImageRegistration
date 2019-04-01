@@ -1,4 +1,5 @@
 import src.LossFunctions as lf
+import src.NetOptimizer as netOpt
 import numpy as np
 import torch
 import sys
@@ -18,22 +19,53 @@ class CycleLossTests():
     return defField  
   
   def cycleLossTest0(self):
-    fileName0 = '/home/fechter/workspace/TorchSandbox/results/DirLab08/deformationFieldDataset0image0channel0.nrrd'
-    fileName1 = '/home/fechter/workspace/TorchSandbox/results/DirLab08/deformationFieldDataset0image0channel-1.nrrd'
-    fileName2 = '/home/fechter/workspace/TorchSandbox/results/DirLab08/origImgDataset0image0channel0.nrrd'
-    fileName3 = '/home/fechter/workspace/TorchSandbox/results/DirLab08/origImgDataset0image0channel-1.nrrd'
+    vf0FileName = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/vf0.nrrd'
+    vf1FileName = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/vf1.nrrd'
+    vf2FileName = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/vf2.nrrd'
+    vf3FileName = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/vf3.nrrd'
+    
+    imgFileName0 = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/img0.nrrd'
+    imgFileName1 = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/img1.nrrd'
+    imgFileName2 = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/img2.nrrd'
+    imgFileName3 = '/home/fechter/workspace/TorchSandbox/resources/CycleLossFields/img3.nrrd'
     
     defFields = []
-    defFields.append(self.loadDefField(fileName0))
-    defFields.append(self.loadDefField(fileName1))
+    
+    vf0 = self.loadDefField(vf0FileName)
+    vf1 = self.loadDefField(vf1FileName)
+    vf2 = self.loadDefField(vf2FileName)
+    vf3 = self.loadDefField(vf3FileName)
+    
+    mask0 = np.zeros(vf0.shape)
+    mask0[27,30,32] = 1.0
+    vf0 = vf0 * mask0
+    
+    mask1 = np.zeros(vf1.shape)
+    mask1[28,30,34] = 1.0
+    vf1 = vf1 * mask1
+    
+    mask2 = np.zeros(vf2.shape)
+    mask2[28,32,34] = 1.0
+    vf2 = vf2 * mask2
+    
+    mask3 = np.zeros(vf3.shape)
+    mask3[27,32,32] = 1.0
+    vf3 = vf3 * mask3
+    
+    defFields.append(vf0)
+    defFields.append(vf1)
+    defFields.append(vf2)
+    defFields.append(vf3)
     defFields = np.concatenate(defFields,axis=-1).astype('float32')
     defFields = np.expand_dims(defFields, axis=0)
     defFields = np.moveaxis(defFields, -1, 1)
     defFields = torch.from_numpy(defFields)
     
     imgDataToWork = []
-    imgDataToWork.append(self.loadImage(fileName2))
-    imgDataToWork.append(self.loadImage(fileName3))
+    imgDataToWork.append(self.loadImage(imgFileName0))
+    imgDataToWork.append(self.loadImage(imgFileName1))
+    imgDataToWork.append(self.loadImage(imgFileName2))
+    imgDataToWork.append(self.loadImage(imgFileName3))
     imgDataToWork = np.stack(imgDataToWork).astype('float32')
     imgDataToWork = np.expand_dims(imgDataToWork, axis=0)
     imgDataToWork = torch.from_numpy(imgDataToWork)
@@ -44,59 +76,12 @@ class CycleLossTests():
     zeroIndices = torch.from_numpy( np.indices([imgDataToWork.shape[0],3,imgDataToWork.shape[2],imgDataToWork.shape[3],imgDataToWork.shape[4]],dtype=np.float32) )
     zeroIndices[1] -= 3.0 
     cycleImgData = torch.empty(defFields.shape, device=torch.device("cpu"))
+    netOptim = netOpt.NetOptimizer(None, None, None, None)
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
       
-      fieldsLow4 = zeroIndices[4].long()
-      partHigh4 = zeroIndices[4] - fieldsLow4.float()
-      partLow4 = 1.0 - partHigh4
-      fieldsHigh4 = fieldsLow4 + 1
-      fieldsHigh4[fieldsHigh4 > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1
-      fieldsLow4[fieldsLow4 > (imgDataToWork.shape[4] - 1)] = imgDataToWork.shape[4] - 1      
+      netOptim.cycleLossCalculations(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
       
-      fieldsLow3 = zeroIndices[3].long()
-      partHigh3 = zeroIndices[3] - fieldsLow3.float()
-      partLow3 = 1.0 - partHigh3
-      fieldsHigh3 = fieldsLow3 + 1
-      fieldsHigh3[fieldsHigh3 > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1
-      fieldsLow3[fieldsLow3 > (imgDataToWork.shape[3] - 1)] = imgDataToWork.shape[3] - 1  
-      
-      fieldsLow2 = zeroIndices[2].long()
-      partHigh2 = zeroIndices[2] - fieldsLow2.float()
-      partLow2 = 1.0 - partHigh2
-      fieldsHigh2 = fieldsLow2 + 1
-      fieldsHigh2[fieldsHigh2 > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1
-      fieldsLow2[fieldsLow2 > (imgDataToWork.shape[2] - 1)] = imgDataToWork.shape[2] - 1  
-      
-      fields0 = zeroIndices[0].long()
-      fields1 = zeroIndices[1].long()
-      
-      cycleImgData[:,chanRange, ] = partLow2 * partLow3 * partLow4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsLow4] + \
-      partLow2 * partLow3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsHigh4] + \
-      partLow2 * partHigh3 * partLow4 * defFields[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsLow4] + \
-      partHigh2 * partLow3 * partLow4 * defFields[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsLow4] + \
-      partHigh2 * partHigh3 * partLow4 * defFields[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsLow4] + \
-      partHigh2 * partLow3 * partHigh4 * defFields[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsHigh4] + \
-      partLow2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsHigh4] + \
-      partHigh2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsHigh4]
-      
-      zeroIndices[1] += 3.0
-      
-      ##take care of def vec order !!!
-      tmpField = cycleImgData[:,None,chanRange[2],].detach()
-      zeroIndices[2][:,None,0,] += tmpField
-      zeroIndices[2][:,None,1,] += tmpField
-      zeroIndices[2][:,None,2,] += tmpField
-      
-      tmpField = cycleImgData[:,None,chanRange[1],].detach()
-      zeroIndices[3][:,None,0,] += tmpField
-      zeroIndices[3][:,None,1,] += tmpField
-      zeroIndices[3][:,None,2,] += tmpField
-      
-      tmpField = cycleImgData[:,None,chanRange[0],].detach()
-      zeroIndices[4][:,None,0,] += tmpField
-      zeroIndices[4][:,None,1,] += tmpField
-      zeroIndices[4][:,None,2,] += tmpField      
        
 #       cycleImgData[:,chanRange, ] = torch.nn.functional.grid_sample(defFields[:,chanRange, ], cycleIdxData, mode='bilinear', padding_mode='border')
                    
@@ -106,7 +91,7 @@ class CycleLossTests():
     
 #     del cycleIdxData
     
-    cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)    
+    cycleLoss = lossCalculator.cycleLoss(cycleImgData, torch.device("cpu"))    
 
     return True
     

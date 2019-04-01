@@ -46,7 +46,8 @@ def getZeroDefField(imagShape, device):
 
 def getZeroIdxField(imagShape, device):
   if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices.shape):
-    zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]]) )
+    zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
+    zeroIndices[1] -= 3.0 
     Context.zeroIndices = zeroIndices.to(device)
   return Context.zeroIndices
 

@@ -32,7 +32,7 @@ if test:
   cycleW = 0.01
   #smoothW = (0.001,0.001,0.001,0.001,0.001,0.001)
   #lossTollerances=(0.00001,0.00001)
-  lossTollerances=(0.001,)
+  lossTollerances=(0.00001,)
 else:
   ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
