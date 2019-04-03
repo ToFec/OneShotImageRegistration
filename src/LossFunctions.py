@@ -108,15 +108,11 @@ class LossFunctions():
     idx = np.arange(0,vecField.shape[1]-1)
     
     t = vecField[:,idx+1,:,:].detach()
-    loss10 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,idx+1,:,:] - self.imgData[imgidx,:,idx,:,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss10 = Utils.getLoss10(vecField.shape, device)
     loss10[:,idx,:,:] = torch.abs(t -vecField[:,idx,:,:])# * weights
     
     t = vecField[:,idx,:,:].detach()
-    loss11 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,idx,:,:] - self.imgData[imgidx,:,idx+1,:,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss11 = Utils.getLoss11(vecField.shape, device)
     loss11[:,idx+1,:,:] = torch.abs(t - vecField[:,idx+1,:,:])# * weights
     loss1 = (loss10 + loss11) / self.dimWeight[0]
     
@@ -127,15 +123,11 @@ class LossFunctions():
     idx = np.arange(0,vecField.shape[2]-1)
     
     t = vecField[:,:,idx+1,:].detach()
-    loss20 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,:,idx+1,:] - self.imgData[imgidx,:,:,idx,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss20 = Utils.getLoss20(vecField.shape, device)
     loss20[:,:,idx,:] = torch.abs(t - vecField[:,:,idx,:])# * weights
     
     t = vecField[:,:,idx,:].detach()
-    loss21 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,:,idx,:] - self.imgData[imgidx,:,:,idx+1,:])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss21 = Utils.getLoss21(vecField.shape, device)
     loss21[:,:,idx+1,:] = torch.abs(t - vecField[:,:,idx+1,:])# * weights
     loss2 = (loss20 + loss21) / self.dimWeight[1]
     return loss2
@@ -145,15 +137,11 @@ class LossFunctions():
     idx = np.arange(0,vecField.shape[3]-1)
     
     t = vecField[:,:,:,idx+1].detach()
-    loss30 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,:,:,idx+1] - self.imgData[imgidx,:,:,:,idx])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss30 = Utils.getLoss30(vecField.shape, device)
     loss30[:,:,:,idx] = torch.abs(t - vecField[:,:,:,idx])# * weights
     
     t = vecField[:,:,:,idx].detach()
-    loss31 = torch.zeros(vecField.shape, device=device, requires_grad=False)
-#     weights = torch.max(torch.abs(self.imgData[imgidx,:,:,:,idx] - self.imgData[imgidx,:,:,:,idx+1])*-1.0 + 1.0,torch.tensor(0.0,device=device))
-#     weights = Utils.numpyRepeat(weights, 3)
+    loss31 = Utils.getLoss31(vecField.shape, device)
     loss31[:,:,:,idx+1] = torch.abs(t - vecField[:,:,:,idx+1])# * weights
     loss3 = (loss30 + loss31) / self.dimWeight[2]
     return loss3

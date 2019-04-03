@@ -148,12 +148,8 @@ class NetOptimizer(object):
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
     
-    #zeroDefField = Utils.getZeroDefField(imgDataToWork.shape, self.userOpts.device)
-    
-    imgDataDef = torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)
-    cycleImgData = torch.empty(defFields.shape, device=self.userOpts.device)
-    
-#     cycleIdxData = zeroDefField.clone()
+    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
+    cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
     
     zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, self.userOpts.device)
     
@@ -163,7 +159,7 @@ class NetOptimizer(object):
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-      self.cycleLossCalculations(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
+      self.cycleLossCalculationsNearestNeighbor(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
       
     crossCorr = lossCalculator.normCrossCorr(imgDataDef)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
