@@ -45,11 +45,17 @@ def getZeroDefField(imagShape, device):
   return Context.zeroDefField
 
 def getZeroIdxField(imagShape, device):
-  if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices.shape):
+  if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices[0].shape[2:]):
     zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
-    zeroIndices[1] -= 3.0 
-    Context.zeroIndices = zeroIndices.to(device)
-  return Context.zeroIndices
+    zeroIndices[1] -= 3.0
+    idxs0 = zeroIndices[0].long().to(device)
+    idxs1 = zeroIndices[1].long().to(device)
+    idxs2 = zeroIndices[2].to(device)
+    idxs3 = zeroIndices[3].to(device)
+    idxs4 = zeroIndices[4].to(device)
+    Context.zeroIndices = [idxs0, idxs1, idxs2, idxs3, idxs4]
+  [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
+  return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
 def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
     smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)

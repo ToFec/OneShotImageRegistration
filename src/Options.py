@@ -1,7 +1,7 @@
 import torch
 test = True
 
-numberOfEpochs = 1000
+numberOfEpochs = 50
 testMode = True
 trainMode = True
 oneShot = True
@@ -29,7 +29,7 @@ if test:
   #boundarySmoothnessW=(1.0, 10.0, 1.0, 10.0, 1.0, 10.0)
   boundarySmoothnessW=(0.0, 1.0, 1.0)
   smoothW = (0.001,0.001,0.001)
-  cycleW = 0.01
+  cycleW = 0.001
   #smoothW = (0.001,0.001,0.001,0.001,0.001,0.001)
   #lossTollerances=(0.00001,0.00001)
   lossTollerances=(0.00001,)

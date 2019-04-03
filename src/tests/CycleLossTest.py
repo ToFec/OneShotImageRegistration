@@ -1,5 +1,6 @@
 import src.LossFunctions as lf
 import src.NetOptimizer as netOpt
+import src.Utils as Utils
 import numpy as np
 import torch
 import sys
@@ -73,8 +74,8 @@ class CycleLossTests():
     
     lossCalculator = lf.LossFunctions(imgDataToWork, defFields, defFields, (0.97,0.97,2.5))
     
-    zeroIndices = torch.from_numpy( np.indices([imgDataToWork.shape[0],3,imgDataToWork.shape[2],imgDataToWork.shape[3],imgDataToWork.shape[4]],dtype=np.float32) )
-    zeroIndices[1] -= 3.0 
+    zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, torch.device("cpu"))
+    
     cycleImgData = torch.empty(defFields.shape, device=torch.device("cpu"))
     netOptim = netOpt.NetOptimizer(None, None, None, None)
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
@@ -82,16 +83,17 @@ class CycleLossTests():
       
       netOptim.cycleLossCalculations(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
       
-       
-#       cycleImgData[:,chanRange, ] = torch.nn.functional.grid_sample(defFields[:,chanRange, ], cycleIdxData, mode='bilinear', padding_mode='border')
-                   
-#       cycleIdxData[..., 0] = cycleIdxData[..., 0] + defFields[:, chanIdx * 3, ].detach() / ((imgToDef.shape[4]-1) / 2.0)
-#       cycleIdxData[..., 1] = cycleIdxData[..., 1] + defFields[:, chanIdx * 3 + 1, ].detach() / ((imgToDef.shape[3]-1) / 2.0)
-#       cycleIdxData[..., 2] = cycleIdxData[..., 2] + defFields[:, chanIdx * 3 + 2, ].detach() / ((imgToDef.shape[2]-1) / 2.0)
+    cycleLoss0 = lossCalculator.cycleLoss(cycleImgData, torch.device("cpu"))
     
-#     del cycleIdxData
-    
-    cycleLoss = lossCalculator.cycleLoss(cycleImgData, torch.device("cpu"))    
+    zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, torch.device("cpu"))
+    cycleImgData = torch.empty(defFields.shape, device=torch.device("cpu"))
+    netOptim = netOpt.NetOptimizer(None, None, None, None)
+    for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
+      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+      
+      netOptim.cycleLossCalculationsNearestNeighbor(zeroIndices, cycleImgData, defFields, imgDataToWork.shape, chanRange)
+      
+    cycleLoss1 = lossCalculator.cycleLoss(cycleImgData, torch.device("cpu"))
 
     return True
     

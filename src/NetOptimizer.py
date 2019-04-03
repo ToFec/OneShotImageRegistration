@@ -15,33 +15,71 @@ class NetOptimizer(object):
   def normalizeWeights(self, ccW, sW, cyW):
     weightSum = ccW + sW + cyW
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
+
+
+  def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, imgDataShape, chanRange):
+    
+    fieldsIdxs4 = zeroIndices[4].round().long()
+    fieldsIdxs4[fieldsIdxs4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
+    
+    fieldsIdxs3 = zeroIndices[3].round().long()
+    fieldsIdxs3[fieldsIdxs3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1
+    
+    fieldsIdxs2 = zeroIndices[2].round().long()
+    fieldsIdxs2[fieldsIdxs2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1
+    
+    fields0 = zeroIndices[0]
+    fields1 = zeroIndices[1]
+    
+    cycleImgData[:,chanRange, ] = defFields[fields0,fields1,fieldsIdxs2, fieldsIdxs3, fieldsIdxs4]
+    
+    zeroIndices[1] += 3
+    
+    ##take care of def vec order !!!
+    tmpField = cycleImgData[:,None,chanRange[2],].detach()
+    zeroIndices[2][:,None,0,] += tmpField
+    zeroIndices[2][:,None,1,] += tmpField
+    zeroIndices[2][:,None,2,] += tmpField
+    
+    tmpField = cycleImgData[:,None,chanRange[1],].detach()
+    zeroIndices[3][:,None,0,] += tmpField
+    zeroIndices[3][:,None,1,] += tmpField
+    zeroIndices[3][:,None,2,] += tmpField
+    
+    tmpField = cycleImgData[:,None,chanRange[0],].detach()
+    zeroIndices[4][:,None,0,] += tmpField
+    zeroIndices[4][:,None,1,] += tmpField
+    zeroIndices[4][:,None,2,] += tmpField 
             
 
   def cycleLossCalculations(self, zeroIndices, cycleImgData, defFields, imgDataShape, chanRange):
     
-    fieldsLow4 = zeroIndices[4].long()
-    partHigh4 = zeroIndices[4] - fieldsLow4.float()
+    fieldsLow4 = zeroIndices[4].trunc()
+    partHigh4 = zeroIndices[4] - fieldsLow4
     partLow4 = 1.0 - partHigh4
+    fieldsLow4 = fieldsLow4.long()
     fieldsHigh4 = fieldsLow4 + 1
     fieldsHigh4[fieldsHigh4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
     fieldsLow4[fieldsLow4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1      
     
-    fieldsLow3 = zeroIndices[3].long()
-    partHigh3 = zeroIndices[3] - fieldsLow3.float()
+    fieldsLow3 = zeroIndices[3].trunc()
+    partHigh3 = zeroIndices[3] - fieldsLow3
     partLow3 = 1.0 - partHigh3
+    fieldsLow3 = fieldsLow3.long()
     fieldsHigh3 = fieldsLow3 + 1
     fieldsHigh3[fieldsHigh3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1
     fieldsLow3[fieldsLow3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1  
     
-    fieldsLow2 = zeroIndices[2].long()
-    partHigh2 = zeroIndices[2] - fieldsLow2.float()
+    fieldsLow2 = zeroIndices[2].trunc()
+    partHigh2 = zeroIndices[2] - fieldsLow2
     partLow2 = 1.0 - partHigh2
+    fieldsLow2 = fieldsLow2.long()
     fieldsHigh2 = fieldsLow2 + 1
     fieldsHigh2[fieldsHigh2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1
     fieldsLow2[fieldsLow2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1  
     
-    fields0 = zeroIndices[0].long()
-    fields1 = zeroIndices[1].long()
+    fields0 = zeroIndices[0]
+    fields1 = zeroIndices[1]
     
     cycleImgData[:,chanRange, ] = partLow2 * partLow3 * partLow4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsLow4] + \
     partLow2 * partLow3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsLow3, fieldsHigh4] + \
@@ -52,7 +90,7 @@ class NetOptimizer(object):
     partLow2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsHigh4] + \
     partHigh2 * partHigh3 * partHigh4 * defFields[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsHigh4]
     
-    zeroIndices[1] += 3.0
+    zeroIndices[1] += 3
     
     ##take care of def vec order !!!
     tmpField = cycleImgData[:,None,chanRange[2],].detach()
@@ -117,7 +155,7 @@ class NetOptimizer(object):
     
 #     cycleIdxData = zeroDefField.clone()
     
-    zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, self.userOpts.device).clone()
+    zeroIndices = Utils.getZeroIdxField(imgDataToWork.shape, self.userOpts.device)
     
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]

@@ -95,7 +95,10 @@ class UNet(nn.Module):
       if isinstance(m, nn.Conv3d):
         init.xavier_normal_(m.weight)
         init.constant_(m.bias, 0)
-      if isinstance(m, nn.ConvTranspose3d):
+      elif isinstance(m, nn.ConvTranspose3d):
         init.xavier_normal_(m.weight)
         init.constant_(m.bias, 0)
+      elif isinstance(m, nn.BatchNorm3d):
+        nn.init.constant_(m.weight, 1)
+        nn.init.constant_(m.bias, 0)
   
