@@ -308,60 +308,58 @@ class Optimize():
         samplingRates = self.userOpts.downSampleRates
         
         self.net.train()
-        with torch.autograd.profiler.emit_nvtx() as prof:
-          currDefField = None
-          for samplingRateIdx, samplingRate in enumerate(samplingRates):
-            print('sampleRate: ', samplingRate)
-          
-            sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
-            sampledImgData = sampledImgData.to(self.userOpts.device)
-            sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
-            idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
-            
-            print('idxs: ', idxs)
-  
-            if currDefField is None:
-              currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
-            
-            for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
-              print('lossTollerance: ', lossTollerance)
-            
-              lastDeffield = currDefField.clone()
-              for patchIdx, idx in enumerate(idxs):
-                print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-                
-                imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-                imgDataToWork = imgDataToWork.to(self.userOpts.device)
-                
-                patchIteration=0
-                lossCounter = 0
-                runningLoss = torch.ones(10, device=self.userOpts.device)
-                while True:
-                  loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
-                  detachLoss = loss.detach()                
-                  runningLoss[lossCounter] = detachLoss
-                  if lossCounter == 9:
-                    meanLoss = runningLoss.mean()
-                    self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
-                    lossCounter = 0
-                    if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
-                      break
-                  else:
-                    lossCounter+=1
-                  patchIteration+=1
-              
-            with torch.no_grad():
-              tmpField = currDefField - lastDeffield
-              if samplingRate < 1:
-                upSampleRate = samplingRates[samplingRateIdx+1] / samplingRate
-                currDefField = currDefField * upSampleRate
-                currDefField = sampleImg(currDefField, upSampleRate)
-                
-                upSampleRate = 1.0 / samplingRate
-                tmpField = tmpField * upSampleRate
-                tmpField = sampleImg(tmpField, upSampleRate)
+        currDefField = None
+        for samplingRateIdx, samplingRate in enumerate(samplingRates):
+          print('sampleRate: ', samplingRate)
         
-        print(prof)  
+          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+          sampledImgData = sampledImgData.to(self.userOpts.device)
+          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+          
+          print('idxs: ', idxs)
+
+          if currDefField is None:
+            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+          
+          for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
+            print('lossTollerance: ', lossTollerance)
+          
+            lastDeffield = currDefField.clone()
+            for patchIdx, idx in enumerate(idxs):
+              print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+              
+              imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+              imgDataToWork = imgDataToWork.to(self.userOpts.device)
+              
+              patchIteration=0
+              lossCounter = 0
+              runningLoss = torch.ones(10, device=self.userOpts.device)
+              while True:
+                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
+                detachLoss = loss.detach()                
+                runningLoss[lossCounter] = detachLoss
+                if lossCounter == 9:
+                  meanLoss = runningLoss.mean()
+                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
+                  lossCounter = 0
+                  if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
+                    break
+                else:
+                  lossCounter+=1
+                patchIteration+=1
+            
+          with torch.no_grad():
+            tmpField = currDefField - lastDeffield
+            if samplingRate < 1:
+              upSampleRate = samplingRates[samplingRateIdx+1] / samplingRate
+              currDefField = currDefField * upSampleRate
+              currDefField = sampleImg(currDefField, upSampleRate)
+              
+              upSampleRate = 1.0 / samplingRate
+              tmpField = tmpField * upSampleRate
+              tmpField = sampleImg(tmpField, upSampleRate)
+        
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         if not self.userOpts.usePaddedNet:

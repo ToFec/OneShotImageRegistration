@@ -21,12 +21,15 @@ class NetOptimizer(object):
     
     fieldsIdxs4 = zeroIndices[4].round().long()
     fieldsIdxs4[fieldsIdxs4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
+    fieldsIdxs4[fieldsIdxs4 < 0] = 0
     
     fieldsIdxs3 = zeroIndices[3].round().long()
     fieldsIdxs3[fieldsIdxs3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1
+    fieldsIdxs3[fieldsIdxs3 < 0] = 0
     
     fieldsIdxs2 = zeroIndices[2].round().long()
     fieldsIdxs2[fieldsIdxs2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1
+    fieldsIdxs2[fieldsIdxs2 < 0] = 0
     
     fields0 = zeroIndices[0]
     fields1 = zeroIndices[1]
@@ -58,22 +61,27 @@ class NetOptimizer(object):
     partHigh4 = zeroIndices[4] - fieldsLow4
     partLow4 = 1.0 - partHigh4
     fieldsLow4 = fieldsLow4.long()
+    fieldsLow4[fieldsLow4 < 0] = 0 
     fieldsHigh4 = fieldsLow4 + 1
     fieldsHigh4[fieldsHigh4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
-    fieldsLow4[fieldsLow4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1      
+    fieldsLow4[fieldsLow4 > (imgDataShape[4] - 1)] = imgDataShape[4] - 1
+         
     
     fieldsLow3 = zeroIndices[3].trunc()
     partHigh3 = zeroIndices[3] - fieldsLow3
     partLow3 = 1.0 - partHigh3
     fieldsLow3 = fieldsLow3.long()
+    fieldsLow3[fieldsLow3 < 0] = 0
     fieldsHigh3 = fieldsLow3 + 1
     fieldsHigh3[fieldsHigh3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1
     fieldsLow3[fieldsLow3 > (imgDataShape[3] - 1)] = imgDataShape[3] - 1  
+    
     
     fieldsLow2 = zeroIndices[2].trunc()
     partHigh2 = zeroIndices[2] - fieldsLow2
     partLow2 = 1.0 - partHigh2
     fieldsLow2 = fieldsLow2.long()
+    fieldsLow2[fieldsLow2 < 0] = 0
     fieldsHigh2 = fieldsLow2 + 1
     fieldsHigh2[fieldsHigh2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1
     fieldsLow2[fieldsLow2 > (imgDataShape[2] - 1)] = imgDataShape[2] - 1  
