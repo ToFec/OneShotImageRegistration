@@ -178,4 +178,4 @@ class NetOptimizer(object):
       
     loss.backward()
     self.optimizer.step()
-    return loss, defFields.detach()        
+    return loss        

@@ -336,7 +336,7 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss, tmpField = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
+                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
