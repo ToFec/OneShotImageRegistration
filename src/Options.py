@@ -21,6 +21,7 @@ netMinPatchSizePadded = 8
 normImgPatches=False
 trainTillConvergence = True
 lossArraySize=50
+ccCalcNN=False
 
 cumulativeLossTollerance=100#0.001
 if test:

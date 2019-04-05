@@ -18,10 +18,10 @@ def main(argv):
   
   #torch.backends.cudnn.enabled = False
   #CUDA_LAUNCH_BLOCKING = 1
-  callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --numberOfEpochs=500 --outputPath=PATH'
+  callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'numberOfEpochs=', 'outputPath='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'ccCalcNN', 'outputPath='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -38,8 +38,8 @@ def main(argv):
       userOpts.device = arg      
     elif opt == '--outputPath':
       userOpts.outputPath = arg      
-    elif opt == '--numberOfEpochs':
-      userOpts.numberOfEpochs = int(arg)
+    elif opt == '--ccCalcNN':
+      userOpts.ccCalcNN = True
       
   torch.manual_seed(0)
   np.random.seed(0)
