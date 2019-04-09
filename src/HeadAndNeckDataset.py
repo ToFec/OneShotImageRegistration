@@ -7,6 +7,7 @@ import numpy as np
 import Utils
 from eval.LandmarkHandler import PointReader
 import Options
+from Context import imgDataDef
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -122,7 +123,7 @@ class HeadAndNeckDataset(Dataset):
         ## we process the image in the form the form z,y,x but meta data comes as x,y,z
         self.spacings[idx] = spacing
         self.origins[idx] = tmp.GetOrigin()
-        self.directionCosines[idx] = tmp.GetDirection()
+        self.directionCosines[idx] = [1,0,0,0,1,0,0,0,1]#tmp.GetDirection()
         
       imgData = np.stack(imgData).astype('float32')
       
@@ -197,7 +198,18 @@ class HeadAndNeckDataset(Dataset):
       nuOfDownSampleSteps = len(Options.downSampleRates) -1
       timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
       
+      padValues = [[0, 0],[0, 0],[0, 0],[0, 0]]
+      for i in range(1,4):
+        if imgData.shape[i] < 2*timesDividableByTwo:
+          padValues[i][0] = int(2*timesDividableByTwo - imgData.shape[i] + 1) / 2 
+          padValues[i][1] = int(2*timesDividableByTwo - imgData.shape[i] + 1) / 2
+      
+      imgData = np.pad(imgData,padValues, 'constant', constant_values=[[0, 0],[0, 0],[0, 0],[0, 0]])
+      
+      #self.origins[idx] = tuple(self.origins[idx] - np.asarray([padValues[3][0], padValues[2][0], padValues[1][0]]) *  self.spacings[idx])
+      
       if len(maskData) > 0:
+        maskData = np.pad(maskData,padValues, 'constant', constant_values=[[0, 0],[0, 0],[0, 0],[0, 0]])
         maskChanSum = np.sum(maskData,0)
         minMaxXYZ = np.nonzero(maskChanSum)
         min0 = minMaxXYZ[0].min()
@@ -208,25 +220,32 @@ class HeadAndNeckDataset(Dataset):
         
         min2 = minMaxXYZ[2].min()
         max2 = minMaxXYZ[2].max() + 1
+        minMaxShape = maskData.shape
         
-        min0, max0 = self.getMinMax(min0, max0, maskData.shape[1], timesDividableByTwo)
-        min1, max1 = self.getMinMax(min1, max1, maskData.shape[2], timesDividableByTwo)
-        min2, max2 = self.getMinMax(min2, max2, maskData.shape[3], timesDividableByTwo)
+      else:
+        min0 = 0
+        min1 = 0
+        min2 = 0
+        max0 = imgData.shape[1]
+        max1 = imgData.shape[2]
+        max2 = imgData.shape[3]
+        minMaxShape = imgData.shape
         
-        maskData = maskData[:,min0:max0, min1:max1, min2:max2]
-        imgData = imgData[:,min0:max0, min1:max1, min2:max2]
-        
-        #self.origins[idx] = tuple(self.origins[idx] + np.asarray([min0, min1, min2]) *  self.spacings[idx])
-        self.origins[idx] = tuple(self.origins[idx] + np.asarray([min2, min1, min0]) *  self.spacings[idx])
-        
-        if len(labelData) > 0:
-          labelData = labelData[:,min0:max0, min1:max1, min2:max2]
+      min0, max0 = self.getMinMax(min0, max0, minMaxShape[1], timesDividableByTwo)
+      min1, max1 = self.getMinMax(min1, max1, minMaxShape[2], timesDividableByTwo)
+      min2, max2 = self.getMinMax(min2, max2, minMaxShape[3], timesDividableByTwo)
       
-      else: 
-        imgData = imgData[:,:int((imgData.shape[1]/timesDividableByTwo)*timesDividableByTwo),:int(imgData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(imgData.shape[3]/timesDividableByTwo)*timesDividableByTwo]   
-        
-        if len(labelData) > 0:
-          labelData = labelData[:,:int(labelData.shape[1]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[2]/timesDividableByTwo)*timesDividableByTwo,:int(labelData.shape[3]/timesDividableByTwo)*timesDividableByTwo]
+      if len(maskData) > 0:
+        maskData = maskData[:,min0:max0, min1:max1, min2:max2]
+      imgData = imgData[:,min0:max0, min1:max1, min2:max2]
+      
+      #self.origins[idx] = tuple(self.origins[idx] + np.asarray([min0, min1, min2]) *  self.spacings[idx])
+      self.origins[idx] = tuple(self.origins[idx] + np.asarray([min2, min1, min0]) *  self.spacings[idx])
+      
+      if len(labelData) > 0:
+        labelData = np.pad(labelData,padValues, 'constant', constant_values=[[0, 0],[0, 0],[0, 0],[0, 0]])
+        labelData = labelData[:,min0:max0, min1:max1, min2:max2]
+            
           
       return imgData, maskData, labelData
     

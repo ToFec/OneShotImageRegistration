@@ -79,9 +79,12 @@ class Optimize():
   
         del indexArray
         
-        self.saveResults(imgData, landmarkData, defFields, dataloader, i)
+        self.saveResults(data, defFields, dataloader, i)
         
-  def saveResults(self, imgData, landmarkData, defFields, dataloader, datasetIdx):
+  def saveResults(self, data, defFields, dataloader, datasetIdx):
+    imgData = data['image']
+    labelData = data['label']
+    landmarkData = data['landmarks']
     pp = PointProcessor()
     pr = PointReader()
     for imgIdx in range(imgData.shape[0]):
@@ -90,6 +93,17 @@ class Optimize():
         imgToDef = imgToDef.to(self.userOpts.device)
         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
         deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
+        
+        if (labelData is not None) and (len(labelData) > 0):
+          labelToDef = labelData[None, None, imgIdx, chanIdx, ].float()
+          labelToDef = labelToDef.to(self.userOpts.device)
+          
+          deformedLabelTmp = deformImage(labelToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
+          deformedLabelTmp = deformedLabelTmp.round().short()
+          labelDataDef = sitk.GetImageFromArray(deformedLabelTmp[0, 0, ])
+          labelDataOrig = sitk.GetImageFromArray(labelToDef[0, 0, ])
+          dataloader.dataset.saveData(labelDataDef, self.userOpts.outputPath, 'deformedLabelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
+          dataloader.dataset.saveData(labelDataOrig, self.userOpts.outputPath, 'origLabelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         
         imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ])
         imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
@@ -277,7 +291,7 @@ class Optimize():
   
         del indexArray
         
-        self.saveResults(imgData, landmarkData, defFields, dataloader, i)
+        self.saveResults({'image': imgData,'label': None,'mask': None,'landmarks': landmarkData}, defFields, dataloader, i)
    
   def trainTestNetDownSamplePatch(self, dataloader):
       if self.userOpts.trainTillConvergence:
@@ -365,7 +379,7 @@ class Optimize():
         if not self.userOpts.usePaddedNet:
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
-        self.saveResults(data['image'], data['landmarks'], currDefField, dataloader, i)
+        self.saveResults(data, currDefField, dataloader, i)
                   
   def trainNet(self, dataloader):
     self.net.train()
