@@ -94,7 +94,7 @@ class Optimize():
         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
         deformedTmp = deformImage(imgToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
         
-        if (labelData is not None) and (len(labelData) > 0):
+        if (labelData is not None) and (labelData.dim() == imgData.dim()):
           labelToDef = labelData[None, None, imgIdx, chanIdx, ].float()
           labelToDef = labelToDef.to(self.userOpts.device)
           

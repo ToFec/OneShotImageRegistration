@@ -1,7 +1,7 @@
 import torch
 testLung = False
 
-numberOfEpochs = 1000
+numberOfEpochs = 5000
 testMode = True
 trainMode = True
 oneShot = True
@@ -11,7 +11,7 @@ vecLengthW = 0.0
 trainingFileNamesCSV=''
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 outputPath='.'
-patchSize=80
+
 maxNumberOfSamples=6 # samples for one batch must be < maxNumberOfSamples
 netDepth=3
 numberOfFiltersFirstLayer=32
@@ -25,6 +25,7 @@ ccCalcNN=True
 
 cumulativeLossTollerance=100#0.001
 if testLung:
+  patchSize=80
   ccW=1.0
   downSampleRates = (0.25,0.5,1.0)
   boundarySmoothnessW=(0.0, 1.0, 1.0)
@@ -32,10 +33,11 @@ if testLung:
   cycleW = 0.001
   lossTollerances=(0.00001,)
 else:
+  patchSize=80
   ccW=1.0
   downSampleRates = (0.5,1.0)
   boundarySmoothnessW=(0.0,1.0)
-  smoothW = (0.001,0.001)
+  smoothW = (0.001,0.005)
   cycleW = 0.1
   lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
