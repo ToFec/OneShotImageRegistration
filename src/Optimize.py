@@ -364,16 +364,15 @@ class Optimize():
                 patchIteration+=1
             
           with torch.no_grad():
-#             tmpField = currDefField - lastDeffield
             if samplingRate < 1:
-              upSampleRate = samplingRates[samplingRateIdx+1] / samplingRate
+              if samplingRateIdx+1 == len(samplingRates):
+                nextSamplingRate = 1.0
+              else:
+                nextSamplingRate = samplingRates[samplingRateIdx+1]
+              upSampleRate = nextSamplingRate / samplingRate
               currDefField = currDefField * upSampleRate
               currDefField = sampleImg(currDefField, upSampleRate)
               
-#               upSampleRate = 1.0 / samplingRate
-#               tmpField = tmpField * upSampleRate
-#               tmpField = sampleImg(tmpField, upSampleRate)
-        
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         if not self.userOpts.usePaddedNet:

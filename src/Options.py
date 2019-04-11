@@ -22,7 +22,7 @@ normImgPatches=False
 trainTillConvergence = True
 lossArraySize=50
 ccCalcNN=True
-
+maskOutZeros=False
 cumulativeLossTollerance=100#0.001
 if testLung:
   patchSize=80
@@ -32,15 +32,17 @@ if testLung:
   smoothW = (0.001,0.001,0.001)
   cycleW = 0.001
   lossTollerances=(0.00001,)
+  useMedianForSampling = (False,False,True)
 else:
   patchSize=80
   ccW=1.0
-  downSampleRates = (0.5,1.0)
-  boundarySmoothnessW=(0.0,1.0)
-  smoothW = (0.001,0.005)
+  downSampleRates = (0.25,0.5,1.0)
+  boundarySmoothnessW=(0.0,1.0,1.0)
+  smoothW = (0.001,0.001,0.001)
   cycleW = 0.1
   lossTollerances=(0.00001,)
-useMedianForSampling = (False,False,True)
+  useMedianForSampling = (False,False,True)
+
 
 
 

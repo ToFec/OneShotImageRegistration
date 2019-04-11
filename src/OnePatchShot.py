@@ -21,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'ccCalcNN', 'outputPath='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'downSampleRates', 'cycleW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -38,8 +38,12 @@ def main(argv):
       userOpts.device = arg      
     elif opt == '--outputPath':
       userOpts.outputPath = arg      
-    elif opt == '--ccCalcNN':
-      userOpts.ccCalcNN = True
+    elif opt == '--maskOutZeros':
+      userOpts.maskOutZeros = True
+    elif opt == '--downSampleRates':
+      userOpts.downSampleRates = (0.25,0.5)
+    elif opt == '--cycleW':
+      userOpts.cycleW = float(arg)     
       
   torch.manual_seed(0)
   np.random.seed(0)

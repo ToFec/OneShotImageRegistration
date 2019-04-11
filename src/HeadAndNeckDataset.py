@@ -152,6 +152,16 @@ class HeadAndNeckDataset(Dataset):
         imgData = imgData / imgStd
         imgData[maskData == 0] = 0
         self.meansAndStds[idx] = (imgMean, imgStd)
+      elif Options.maskOutZeros:  
+        maskData = np.ones(imgData.shape,dtype=np.ubyte)
+        maskData[imgData == 0] = 0
+        
+        imgMean = imgData[maskData > 0].mean()
+        imgData = imgData - imgMean
+        imgStd = imgData[maskData > 0].std()
+        imgData = imgData / imgStd
+        imgData[maskData == 0] = 0
+        self.meansAndStds[idx] = (imgMean, imgStd)
         
       else:
         imgMean = imgData.mean()
