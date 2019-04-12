@@ -139,7 +139,6 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,2,] += tmpField 
             
   def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0):
-    
     # zero the parameter gradients
     self.optimizer.zero_grad()
         
@@ -166,17 +165,17 @@ class NetOptimizer(object):
     
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
-        
+     
     if imgDataToWork.shape[1] > 3:
       smoothnessLoss =lossCalculator.smoothnessVecFieldT(self.userOpts.device)
     else:
       smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
-    
+      
     imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
     cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
-    
+     
     zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)
     
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
@@ -186,14 +185,15 @@ class NetOptimizer(object):
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
       self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, currDefFields, idx)
-      
+     
     crossCorr = lossCalculator.normCrossCorr(imgDataDef)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
-      
+          
     loss.backward()
+    
     self.optimizer.step()
     return loss        

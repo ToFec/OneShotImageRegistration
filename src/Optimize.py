@@ -334,12 +334,12 @@ class Optimize():
           print('sampleRate: ', samplingRate)
         
           sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
-          sampledImgData = sampledImgData.to(self.userOpts.device)
-          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize) 
+#           sampledImgData = sampledImgData.to(self.userOpts.device)
+          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
           print('idxs: ', idxs)
-
+          
           if currDefField is None:
             currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
           

@@ -35,10 +35,10 @@ if testLung:
   lossTollerances=(0.00001,)
   useMedianForSampling = (False,False,True)
 else:
-  patchSize=80
+  patchSize=(80,80,80)
   ccW=1.0
   downSampleSteps = 2
-  stoptAtSampleStep=2
+  stoptAtSampleStep=3
   boundarySmoothnessW=(0.0,1.0,1.0)
   smoothW = (0.001,0.001,0.001)
   cycleW = 0.01
