@@ -1,7 +1,7 @@
 import torch
 from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
 import numpy as np
-from Options import netDepth, netMinPatchSize, netMinPatchSizePadded, usePaddedNet, downSampleRates
+from Options import netDepth, netMinPatchSize, netMinPatchSizePadded, usePaddedNet
 
 class Sampler(object):
 
@@ -234,15 +234,14 @@ class Sampler(object):
   
   def getNextPatchSize(self, leftover):
     nuOfDownSampleLayers = netDepth - 1
-    #nuOfDownSampleSteps = len(downSampleRates) -1
-    modValue = 2**(nuOfDownSampleLayers)# + nuOfDownSampleSteps)
+    modValue = 2**(nuOfDownSampleLayers)
     if not usePaddedNet:
       leftover = leftover + 2*getReceptiveFieldOffset(netDepth)
       minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
     else:
       minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
     if minPatchSize % modValue != 0:
-      minPatchSize = (int(minPatchSize / modValue) * modValue)# +1
+      minPatchSize = (int(minPatchSize / modValue) * modValue)
     return minPatchSize
     
     

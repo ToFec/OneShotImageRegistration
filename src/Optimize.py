@@ -173,6 +173,13 @@ class Optimize():
     return (netStateDictsNew, optimizerStateDictsNew) 
       
   
+  def getDownSampleRates(self):
+    samplingRates = np.ones(self.userOpts.downSampleSteps + 1)     
+    for samplingRateIdx in range(0,self.userOpts.downSampleSteps):
+      samplingRates[samplingRateIdx] = 1.0 / (2*(self.userOpts.downSampleSteps-samplingRateIdx))
+    return samplingRates[0:self.userOpts.stoptAtSampleStep]
+      
+       
   def trainTestNet(self, dataloader):
     optimizer = optim.Adam(self.net.parameters())
     if self.userOpts.trainTillConvergence:
@@ -187,8 +194,8 @@ class Optimize():
     
     for i, data in enumerate(dataloader, 0):
         
-##SAMPLING CODE        
-        samplingRates = self.userOpts.downSampleRates
+##SAMPLING CODE
+        samplingRates = self.getDownSampleRates()    
         firstRun = True
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           imgData, maskData, labelData, landmarkData = sampleImgData(data, samplingRate)
@@ -319,7 +326,7 @@ class Optimize():
           data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
           samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
         
-        samplingRates = self.userOpts.downSampleRates
+        samplingRates = self.getDownSampleRates()
         
         self.net.train()
         currDefField = None

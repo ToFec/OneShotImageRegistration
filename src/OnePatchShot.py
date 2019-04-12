@@ -21,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'downSampleRates', 'cycleW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'cycleW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -40,8 +40,8 @@ def main(argv):
       userOpts.outputPath = arg      
     elif opt == '--maskOutZeros':
       userOpts.maskOutZeros = True
-    elif opt == '--downSampleRates':
-      userOpts.downSampleRates = (0.25,0.5)
+    elif opt == '--stoptAtSampleStep':
+      userOpts.stoptAtSampleStep = int(arg)
     elif opt == '--cycleW':
       userOpts.cycleW = float(arg)     
       

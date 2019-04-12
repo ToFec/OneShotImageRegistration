@@ -205,7 +205,7 @@ class HeadAndNeckDataset(Dataset):
     def getRightSizedData(self, imgData, maskData, labelData, idx):
       
       nuOfDownSampleLayers = Options.netDepth - 1
-      nuOfDownSampleSteps = len(Options.downSampleRates) -1
+      nuOfDownSampleSteps = Options.downSampleSteps
       timesDividableByTwo = 2**(nuOfDownSampleLayers + nuOfDownSampleSteps)
       
       padValues = [[0, 0],[0, 0],[0, 0],[0, 0]]
