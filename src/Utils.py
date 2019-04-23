@@ -4,6 +4,7 @@ import torch
 from GaussSmoothing import GaussianSmoothing
 import Context
 import pickle
+import Options as useropts
 
 def deform(inputVol, x1, y1, z1):
   ##http://simpleitk.github.io/SimpleITK-Notebooks/01_Image_Basics.html
@@ -53,67 +54,92 @@ def getZeroIdxField(imagShape, device):
     idxs2 = zeroIndices[2].to(device)
     idxs3 = zeroIndices[3].to(device)
     idxs4 = zeroIndices[4].to(device)
+    if not useropts.useContext:
+      return [idxs0, idxs1, idxs2, idxs3, idxs4]
     Context.zeroIndices = [idxs0, idxs1, idxs2, idxs3, idxs4]
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
 def getImgDataDef(imagShape, device):
-  if (Context.imgDataDef is None) or (imagShape != Context.imgDataDef.shape):
-    imgDataDef = torch.empty(imagShape, device=device, requires_grad=False)
-    Context.imgDataDef = imgDataDef
+  if useropts.useContext:
+    if (Context.imgDataDef is None) or (imagShape != Context.imgDataDef.shape):
+      imgDataDef = torch.empty(imagShape, device=device, requires_grad=False)
+      Context.imgDataDef = imgDataDef
+    else:
+      Context.imgDataDef.detach_()
+    return Context.imgDataDef
   else:
-    Context.imgDataDef.detach_()
-  return Context.imgDataDef
+    return torch.empty(imagShape, device=device, requires_grad=False)
 
 def getCycleImgData(defFieldShape, device):
-  if (Context.cycleImgData is None) or (defFieldShape != Context.cycleImgData.shape):
-    Context.cycleImgData = torch.empty(defFieldShape, device=device)
+  if useropts.useContext:
+    if (Context.cycleImgData is None) or (defFieldShape != Context.cycleImgData.shape):
+      Context.cycleImgData = torch.empty(defFieldShape, device=device)
+    else:
+      Context.cycleImgData.detach_()
+    return Context.cycleImgData
   else:
-    Context.cycleImgData.detach_()
-  return Context.cycleImgData
-
+    return torch.empty(defFieldShape, device=device)
 
 def getLoss10(vecFieldShape, device):
-  if (Context.loss10 is None) or (vecFieldShape != Context.loss10.shape):
-    Context.loss10 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss10 is None) or (vecFieldShape != Context.loss10.shape):
+      Context.loss10 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss10.detach_()
+    return Context.loss10
   else:
-    Context.loss10.detach_()
-  return Context.loss10
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def getLoss11(vecFieldShape, device):
-  if (Context.loss11 is None) or (vecFieldShape != Context.loss11.shape):
-    Context.loss11 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss11 is None) or (vecFieldShape != Context.loss11.shape):
+      Context.loss11 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss11.detach_()  
+    return Context.loss11
   else:
-    Context.loss11.detach_()  
-  return Context.loss11
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def getLoss20(vecFieldShape, device):
-  if (Context.loss20 is None) or (vecFieldShape != Context.loss20.shape):
-    Context.loss20 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss20 is None) or (vecFieldShape != Context.loss20.shape):
+      Context.loss20 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss20.detach_()    
+    return Context.loss20
   else:
-    Context.loss20.detach_()    
-  return Context.loss20
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def getLoss21(vecFieldShape, device):
-  if (Context.loss21 is None) or (vecFieldShape != Context.loss21.shape):
-    Context.loss21 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss21 is None) or (vecFieldShape != Context.loss21.shape):
+      Context.loss21 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss21.detach_()
+    return Context.loss21
   else:
-    Context.loss21.detach_()
-  return Context.loss21
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def getLoss30(vecFieldShape, device):
-  if (Context.loss30 is None) or (vecFieldShape != Context.loss30.shape):
-    Context.loss30 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss30 is None) or (vecFieldShape != Context.loss30.shape):
+      Context.loss30 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss30.detach_()
+    return Context.loss30
   else:
-    Context.loss30.detach_()
-  return Context.loss30
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def getLoss31(vecFieldShape, device):
-  if (Context.loss31 is None) or (vecFieldShape != Context.loss31.shape):
-    Context.loss31 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+  if useropts.useContext:
+    if (Context.loss31 is None) or (vecFieldShape != Context.loss31.shape):
+      Context.loss31 = torch.zeros(vecFieldShape, device=device, requires_grad=False)
+    else:
+      Context.loss31.detach_()
+    return Context.loss31
   else:
-    Context.loss31.detach_()
-  return Context.loss31
+    return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
 def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
     smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)

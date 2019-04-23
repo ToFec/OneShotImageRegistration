@@ -1,5 +1,6 @@
 import torch
 testLung = False
+useContext = True
 
 numberOfEpochs = 5000
 testMode = True

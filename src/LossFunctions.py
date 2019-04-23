@@ -176,6 +176,8 @@ class LossFunctions():
       loss3 = self.getSmoothnessForDir3(imgIdx, device)
       
       loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+      
+     
     return loss.sum() / self.defFields.shape[0]
   
   ## images must have the same shape

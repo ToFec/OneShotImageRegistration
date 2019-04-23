@@ -332,7 +332,7 @@ class Optimize():
         currDefField = None
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
-        
+         
           sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
 #           sampledImgData = sampledImgData.to(self.userOpts.device)
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
