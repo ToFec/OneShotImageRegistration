@@ -205,6 +205,6 @@ class NetOptimizer(object):
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
           
     loss.backward()
-    
+    print(loss)
     self.optimizer.step()
     return loss        

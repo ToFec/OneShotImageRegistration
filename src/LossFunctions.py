@@ -59,11 +59,11 @@ class LossFunctions():
       loss004 = torch.abs(currDefFields[:,:,idx[0]-1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,4,:,:]) * 0.2
       loss00 = loss000 + loss001 + loss002 + loss003 + loss004
     if idx[0] < currDefFields.shape[2] - defFields.shape[2]:
-      loss010 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-1,:,:])
-      loss011 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-2,:,:]) * 0.8
-      loss012 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-3,:,:]) * 0.6
-      loss013 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-4,:,:]) * 0.4
-      loss014 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2]+1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-5,:,:]) * 0.2
+      loss010 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-1,:,:])
+      loss011 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-2,:,:]) * 0.8
+      loss012 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-3,:,:]) * 0.6
+      loss013 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-4,:,:]) * 0.4
+      loss014 = torch.abs(currDefFields[:,:,idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,-5,:,:]) * 0.2
       loss01 = loss010 + loss011 + loss012 + loss013 + loss014
     loss0 = torch.sum(loss00 + loss01) / self.dimWeight[0]
     
@@ -75,11 +75,11 @@ class LossFunctions():
       loss104 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]-1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,4,:]) * 0.2
       loss10 = loss100 + loss101 + loss102 + loss103 + loss104
     if idx[1] < currDefFields.shape[3] - defFields.shape[3]:
-      loss110 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-1,:])
-      loss111 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-2,:]) * 0.8
-      loss112 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-3,:]) * 0.6
-      loss113 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-4,:]) * 0.4
-      loss114 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3]+1,idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-5,:]) * 0.2
+      loss110 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-1,:])
+      loss111 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-2,:]) * 0.8
+      loss112 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-3,:]) * 0.6
+      loss113 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-4,:]) * 0.4
+      loss114 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,:,-5,:]) * 0.2
       loss11 = loss110 + loss111 + loss112 + loss113 + loss114
     loss1 = torch.sum(loss10 + loss11) / self.dimWeight[1]
       
@@ -91,11 +91,11 @@ class LossFunctions():
       loss204 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]-1] - defFields[:,:,:,:,4]) * 0.2
       loss20 = loss200 + loss201 + loss202 + loss203 + loss204
     if idx[2] < currDefFields.shape[4] - defFields.shape[4]:
-      loss210 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-1])
-      loss211 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-2]) * 0.8
-      loss212 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-3]) * 0.6
-      loss213 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-4]) * 0.4
-      loss214 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]+1] - defFields[:,:,:,:,-5]) * 0.2
+      loss210 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]] - defFields[:,:,:,:,-1])
+      loss211 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]] - defFields[:,:,:,:,-2]) * 0.8
+      loss212 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]] - defFields[:,:,:,:,-3]) * 0.6
+      loss213 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]] - defFields[:,:,:,:,-4]) * 0.4
+      loss214 = torch.abs(currDefFields[:,:,idx[0]:idx[0]+defFields.shape[2],idx[1]:idx[1]+defFields.shape[3],idx[2]+defFields.shape[4]] - defFields[:,:,:,:,-5]) * 0.2
       loss21 = loss210 + loss211 + loss212 + loss213 + loss214
     loss2 = torch.sum(loss20 + loss21) / self.dimWeight[2]
       

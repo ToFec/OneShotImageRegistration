@@ -299,7 +299,30 @@ class Optimize():
         del indexArray
         
         self.saveResults({'image': imgData,'label': None,'mask': None,'landmarks': landmarkData}, defFields, dataloader, i)
-   
+  
+  def getSubCurrDefFieldIdx(self, currDeffield, idx):
+    newIdx = list(idx)
+    offset = [0,0,0]
+    if idx[0] > 0:
+      newIdx[0] = idx[0] - 1
+      newIdx[3] = idx[3] + 1
+      offset[0] = 1
+    if newIdx[0] < currDeffield.shape[2] - newIdx[3]:
+      newIdx[3] = idx[3] + 1      
+    if idx[1] > 0:
+      newIdx[1] = idx[1] - 1
+      newIdx[4] = idx[4] + 1
+      offset[1] = 1
+    if newIdx[1] < currDeffield.shape[3] - newIdx[4]:
+      newIdx[4] = idx[4] + 1          
+    if idx[2] > 0:
+      newIdx[2] = idx[2] - 1
+      newIdx[5] = idx[5] + 1
+      offset[2] = 1
+    if newIdx[2] < currDeffield.shape[4] - newIdx[5]:
+      newIdx[5] = idx[5] + 1
+    return newIdx, offset
+         
   def trainTestNetDownSamplePatch(self, dataloader):
       if self.userOpts.trainTillConvergence:
         iterationValidation = self.terminateLoopByLossAndItCount
@@ -341,23 +364,27 @@ class Optimize():
           print('idxs: ', idxs)
           
           if currDefField is None:
-            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device="cpu", requires_grad=False)
           
           for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
           
-            lastDeffield = currDefField.clone()
+            
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
               
+              currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currDefField, idx)
+              currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(self.userOpts.device)
+              lastDeffield = currDefFieldGPU.clone()
+              
               patchIteration=0
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefField, idx, samplingRateIdx+ltIdx)
+                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefFieldGPU, offset, samplingRateIdx+ltIdx)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
@@ -368,8 +395,8 @@ class Optimize():
                     break
                 else:
                   lossCounter+=1
-                patchIteration+=1
-            
+                patchIteration+=1              
+              currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]++imgDataToWork.shape[4]]
           with torch.no_grad():
             if samplingRate < 1:
               if samplingRateIdx+1 == len(samplingRates):
