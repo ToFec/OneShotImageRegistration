@@ -303,24 +303,37 @@ class Optimize():
   def getSubCurrDefFieldIdx(self, currDeffield, idx):
     newIdx = list(idx)
     offset = [0,0,0]
-    if idx[0] > 0:
-      newIdx[0] = idx[0] - 1
-      newIdx[3] = idx[3] + 1
-      offset[0] = 1
-    if newIdx[0] < currDeffield.shape[2] - newIdx[3]:
-      newIdx[3] = idx[3] + 1      
-    if idx[1] > 0:
-      newIdx[1] = idx[1] - 1
-      newIdx[4] = idx[4] + 1
-      offset[1] = 1
-    if newIdx[1] < currDeffield.shape[3] - newIdx[4]:
-      newIdx[4] = idx[4] + 1          
-    if idx[2] > 0:
-      newIdx[2] = idx[2] - 1
-      newIdx[5] = idx[5] + 1
-      offset[2] = 1
-    if newIdx[2] < currDeffield.shape[4] - newIdx[5]:
-      newIdx[5] = idx[5] + 1
+    radius = 15
+    for i in range(radius,-1,-1):
+      if idx[0] > 0:
+        newIdx[0] = idx[0] - 1 - i
+        newIdx[3] = idx[3] + 1 + i
+        offset[0] = 1 + i
+        break
+    for i in range(radius,0,-1):
+      if newIdx[0] < currDeffield.shape[2] - newIdx[3] - i:
+        newIdx[3] = newIdx[3] + 1 + 1
+        break      
+    for i in range(radius,-1,-1):
+      if idx[1] > 0:
+        newIdx[1] = idx[1] - 1 - i
+        newIdx[4] = idx[4] + 1 + i
+        offset[1] = 1 + i
+        break
+    for i in range(radius,0,-1):
+      if newIdx[1] < currDeffield.shape[3] - newIdx[4] - i:
+        newIdx[4] = newIdx[4] + i + 1
+        break          
+    for i in range(radius,-1,-1):
+      if idx[2] > i:
+        newIdx[2] = idx[2] - 1 - i
+        newIdx[5] = idx[5] + 1 + i
+        offset[2] = 1 + i
+        break
+    for i in range(radius,0,-1):
+      if newIdx[2] < currDeffield.shape[4] - newIdx[5] - i:
+        newIdx[5] = newIdx[5] + i + 1
+        break
     return newIdx, offset
          
   def trainTestNetDownSamplePatch(self, dataloader):
@@ -357,7 +370,6 @@ class Optimize():
           print('sampleRate: ', samplingRate)
          
           sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
-#           sampledImgData = sampledImgData.to(self.userOpts.device)
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
@@ -369,7 +381,7 @@ class Optimize():
           for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
           
-            
+            lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
               
@@ -377,14 +389,14 @@ class Optimize():
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
               
               currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currDefField, idx)
-              currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(self.userOpts.device)
-              lastDeffield = currDefFieldGPU.clone()
+              currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+              lastDeffieldGPU = lastDeffield[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
               
               patchIteration=0
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffield, currDefFieldGPU, offset, samplingRateIdx+ltIdx)
+                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
@@ -395,8 +407,8 @@ class Optimize():
                     break
                 else:
                   lossCounter+=1
-                patchIteration+=1              
-              currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]++imgDataToWork.shape[4]]
+                patchIteration+=1
+              currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
           with torch.no_grad():
             if samplingRate < 1:
               if samplingRateIdx+1 == len(samplingRates):
@@ -412,6 +424,7 @@ class Optimize():
         if not self.userOpts.usePaddedNet:
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
+        currDefField = currDefField.to(self.userOpts.device)
         self.saveResults(data, currDefField, dataloader, i)
                   
   def trainNet(self, dataloader):

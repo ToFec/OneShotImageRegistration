@@ -35,7 +35,6 @@ class NetOptimizer(object):
     else:
       currentAndActualField = defFields
     
-    
     fieldsIdxs4[fieldsIdxs4 > (currentAndActualField.shape[4] - 1)] = currentAndActualField.shape[4] - 1
     fieldsIdxs4[fieldsIdxs4 < 0] = 0
     
@@ -67,7 +66,6 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,0,] += tmpField
     zeroIndices[4][:,None,1,] += tmpField
     zeroIndices[4][:,None,2,] += tmpField 
-            
 
   def cycleLossCalculations(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx):
     
@@ -194,17 +192,9 @@ class NetOptimizer(object):
     
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
-    if not self.userOpts.useContext:
-      del zeroIndices
-      del cycleImgData
-      del imgDataDef
-      del deformedTmp
-      del lossCalculator
-    
     torch.cuda.empty_cache()
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
           
     loss.backward()
-    print(loss)
     self.optimizer.step()
     return loss        
