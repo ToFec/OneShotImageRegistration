@@ -163,8 +163,8 @@ class NetOptimizer(object):
     
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
-     
-    if imgDataToWork.shape[1] > 3:
+          
+    if imgDataToWork.shape[1] > 2:
       smoothnessLoss =lossCalculator.smoothnessVecFieldT(self.userOpts.device)
     else:
       smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
@@ -189,7 +189,7 @@ class NetOptimizer(object):
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
-    
+#     print('%.5f; %5f; %5f; %.5f' % (crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
     torch.cuda.empty_cache()

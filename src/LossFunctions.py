@@ -165,9 +165,9 @@ class LossFunctions():
     for imgIdx in range(self.defFields.shape[0]):
       vecField = self.defFields[imgIdx]
   
-      idx = np.roll(range(0,vecField.shape[0]),-3)
-      t = vecField[idx,:,:,:].detach()
-      loss0 = torch.abs(t - vecField)
+      #idx = np.roll(range(0,vecField.shape[0]),-3)
+      #t = vecField[idx,:,:,:].detach()
+      #loss0 = torch.abs(t - vecField)
       
       loss1 = self.getSmoothnessForDir1(imgIdx, device)
       
@@ -175,8 +175,8 @@ class LossFunctions():
       
       loss3 = self.getSmoothnessForDir3(imgIdx, device)
       
-      loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
-      
+#       loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
+      loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
      
     return loss.sum() / self.defFields.shape[0]
   

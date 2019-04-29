@@ -43,7 +43,7 @@ else:
   boundarySmoothnessW=(0.0,1.0,1.0)
   smoothW = (0.001,0.001,0.001)
   cycleW = 0.01
-  lossTollerances=(0.00001,)
+  lossTollerances=(0.000001,)
   useMedianForSampling = (False,False,True)
 
 
