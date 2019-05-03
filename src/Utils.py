@@ -71,6 +71,17 @@ def getImgDataDef(imagShape, device):
   else:
     return torch.empty(imagShape, device=device, requires_grad=False)
 
+def getImgDataDef2(imagShape, device):
+  if useropts.useContext:
+    if (Context.imgDataDef2 is None) or (imagShape != Context.imgDataDef2.shape):
+      imgDataDef2 = torch.empty(imagShape, device=device, requires_grad=False)
+      Context.imgDataDef2 = imgDataDef2
+    else:
+      Context.imgDataDef2.detach_()
+    return Context.imgDataDef2
+  else:
+    return torch.empty(imagShape, device=device, requires_grad=False)
+
 def getCycleImgData(defFieldShape, device):
   if useropts.useContext:
     if (Context.cycleImgData is None) or (defFieldShape != Context.cycleImgData.shape):

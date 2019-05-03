@@ -1,6 +1,7 @@
 zeroDefField=None
 zeroIndices=None
 imgDataDef=None
+imgDataDef2=None
 cycleImgData=None
 
 loss10=None
