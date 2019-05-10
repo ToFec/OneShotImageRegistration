@@ -42,18 +42,21 @@ def main(argv):
   img0, spacing = loadImage(filename0)
   img1, _ = loadImage(filename1)
   
-  if img0.shape == img1.shape:
-    bie = BinaryImageEvaluator()
-    
-    hd = bie.calculateHausdorffDistance(img0, img1, spacing)
-    dc = bie.calculateDice(img0, img1)
-    assd = bie.calculateASSD(img0, img1, spacing)
-    
-    if outputfile is not None:
-      logFile = open(outputfile,'a', buffering=0)
+  if outputfile is not None:
+    logFile = open(outputfile,'a', buffering=0)
+  
+    if img0.shape == img1.shape and img0.max() > 0 and img1.max() > 0:
+      bie = BinaryImageEvaluator()
+      
+      hd = bie.calculateHausdorffDistance(img0, img1, spacing)
+      dc = bie.calculateDice(img0, img1)
+      assd = bie.calculateASSD(img0, img1, spacing)
+  
       logFile.write(str(dc) + ';' + str(hd) + ';' + str(assd))
-      logFile.write('\n')  
-      logFile.close()
+    else:
+      logFile.write('')
+    logFile.write('\n')  
+    logFile.close()
       
       
   

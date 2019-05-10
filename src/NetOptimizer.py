@@ -173,7 +173,6 @@ class NetOptimizer(object):
     
     
     imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
-    imgDataDef2 = Utils.getImgDataDef2(imgDataToWork.shape, self.userOpts.device)
     cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
      
     zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)
@@ -184,18 +183,9 @@ class NetOptimizer(object):
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
       
-      if chanIdx > -1:
-        imgToDef = imgDataDef2[:,None, chanIdx,].clone().detach()
-        deformedTmp2 = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
-        imgDataDef2[:, chanIdx + 1, ] = deformedTmp2[:, 0, ]
-      else:
-        imgDataDef2[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
-        
       self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, currDefFields, idx)
    
-    crossCorr0 = lossCalculator.normCrossCorr(imgDataDef)
-    crossCorr1 = lossCalculator.normCrossCorr(imgDataDef2)
-    crossCorr = crossCorr0 + crossCorr1
+    crossCorr = lossCalculator.normCrossCorr(imgDataDef)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
