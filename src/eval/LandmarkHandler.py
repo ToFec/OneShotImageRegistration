@@ -105,15 +105,18 @@ class PointProcessor():
       
     pr = PointReader()
     distances = [] 
+    stds = []
     for pIdx in range(-1, i - 1):
       origPoints = pr.loadData(origFiles[pIdx])
       deformedPoints = pr.loadData(deformedFiles[pIdx+1])
-      distances.append( self.calculatePointSetDistance(origPoints, deformedPoints) )
+      mean, std = self.calculatePointSetDistance(origPoints, deformedPoints)
+      distances.append( mean )
+      stds.append(std)
       
-    return distances
+    return distances, stds
 
   def calculatePointSetDistance(self, points0, points1):
-    meanDistance = 0.0
+    distances = []
     for idx in range(0,len(points0)):
       point0 = points0[idx]
       point1 = points1[idx]
@@ -122,10 +125,12 @@ class PointProcessor():
         diff = point0[dim] - point1[dim]
         diff *= diff
         distance += diff
-      print(sqrt(distance))
-      meanDistance += sqrt(distance)
-    meanDistance /= len(points0)
-    return meanDistance
+      currDist = sqrt(distance)
+      distances.append(currDist)
+      print(currDist)
+    meanDistance = np.mean(distances)
+    std = np.std(distances)
+    return meanDistance, std
 
 ##expects a vector field that points from input to output
 ## ATTENTION: the neural net outputs a vector field that points from output to input
@@ -316,11 +321,11 @@ def main(argv):
   elif(convertPoints):
     pointProcessor.convertPoints(filepath0, referenceImg)
   elif(calcDiff):
-    distances = pointProcessor.calculatePointDistance(filepath0, filepath1)
+    distances, stds = pointProcessor.calculatePointDistance(filepath0, filepath1)
     logfile = outputPath + os.path.sep + 'distances.csv'    
     logFile = open(logfile,'a', buffering=0)
-    for dist in distances:
-      logFile.write(str(dist) + ';')
+    for dist, std in zip(distances, stds):
+      logFile.write(str(dist) + ';' + str(std))
     logFile.write('\n')  
     logFile.close()
       

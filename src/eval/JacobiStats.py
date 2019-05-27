@@ -31,9 +31,9 @@ def main(argv):
 #   n, bins, patches = plt.hist(jacobiImgData.flatten(), 400, density=True)
 #   plt.show()
   
-  jacobiImgData[jacobiImgData[:] > 0] = 0
+  jacobiImgData[jacobiImgData[:] < 0] = 0
   
-  negativeFragction = np.count_nonzero(jacobiImgData) / float(jacobiImgData.size)
+  negativeFragction = float(jacobiImgData.size - np.count_nonzero(jacobiImgData)) / float(jacobiImgData.size)
   
 
   seperator = ';'
