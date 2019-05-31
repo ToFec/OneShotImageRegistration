@@ -1,20 +1,20 @@
 #!/bin/bash
 
 
-for i in {0..5}
+echo "Sunny Cycle Eval Start" >> dsc.csv
+
+for i in {0..14}
 do
 
-for j in {0..9}
+for j in {0..19}
 do
-if [ ${i} -lt 3 ] || [ ${j} -eq 0 ] || [ ${j} -eq 5 ]
-then
-./CycleConsistencyCheckPopi2.sh $j 10 $i
-fi
+./CycleConsistencyCheckSunny.sh $j 20 $i
 done
 
 done
 
 exit 0
+
 
 echo "Dirlab Start" >> distances.csv
 
@@ -30,12 +30,16 @@ done
 
 exit 0
 
-for i in {0..14}
+
+for i in {0..5}
 do
 
-for j in {0..19}
+for j in {0..9}
 do
-./CycleConsistencyCheckSunny.sh $j 20 $i
+if [ ${i} -lt 3 ] || [ ${j} -eq 0 ] || [ ${j} -eq 5 ]
+then
+./CycleConsistencyCheckPopi2.sh $j 10 $i
+fi
 done
 
 done
