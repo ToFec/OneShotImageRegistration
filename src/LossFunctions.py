@@ -181,8 +181,8 @@ class LossFunctions():
     return loss.sum() / self.defFields.shape[0]
   
   ## images must have the same shape
-  def normCrossCorr(self, defImg):
-    results = torch.empty(self.imgData.shape[0]*self.imgData.shape[1])
+  def normCrossCorr(self, defImg, device0):
+    results = torch.empty(self.imgData.shape[0]*self.imgData.shape[1], device=device0)
     for imgIdx in range(self.imgData.shape[0]):
       for chanIdx in range(self.imgData.shape[1]):
         x = self.imgData[imgIdx, chanIdx,]

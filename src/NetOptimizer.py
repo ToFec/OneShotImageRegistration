@@ -185,7 +185,7 @@ class NetOptimizer(object):
       
       self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, currDefFields, idx)
    
-    crossCorr = lossCalculator.normCrossCorr(imgDataDef)
+    crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss

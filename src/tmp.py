@@ -65,8 +65,8 @@ diffImg = imgNii.sub(deformedTmp)
 print(diffImg.max())
 print(diffImg.min())
 
-cc0 = lf.normCrossCorr(imgNii, imgNii)
-cc1 = lf.normCrossCorr(imgNii, deformedTmp)
+cc0 = lf.normCrossCorr(imgNii, imgNii, 'cpu')
+cc1 = lf.normCrossCorr(imgNii, deformedTmp, 'cpu')
 
 # svf = lf.smoothnessVecField(defFieldNii)
 

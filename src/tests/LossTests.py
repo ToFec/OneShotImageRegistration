@@ -16,8 +16,8 @@ class LossTests():
     
     lossFunction = lf.LossFunctions([1.0,1.0,1.0])
     
-    cc0 = lossFunction.normCrossCorr(img0, img0)
-    cc1 = lossFunction.normCrossCorr(img0, img1)
+    cc0 = lossFunction.normCrossCorr(img0, img0, 'cpu')
+    cc1 = lossFunction.normCrossCorr(img0, img1, 'cpu')
     if (np.isclose(cc0,0.0,rtol=1.e-5, atol=1.e-5)):
       return True
     else:
