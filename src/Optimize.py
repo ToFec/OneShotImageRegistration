@@ -176,7 +176,7 @@ class Optimize():
   def getDownSampleRates(self):
     samplingRates = np.ones(self.userOpts.downSampleSteps + 1)     
     for samplingRateIdx in range(0,self.userOpts.downSampleSteps):
-      samplingRates[samplingRateIdx] = 1.0 / (2*(self.userOpts.downSampleSteps-samplingRateIdx))
+      samplingRates[samplingRateIdx] = 1.0 / (2**(self.userOpts.downSampleSteps-samplingRateIdx))
     return samplingRates[0:self.userOpts.stoptAtSampleStep]
       
        

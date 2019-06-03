@@ -182,7 +182,7 @@ class LossFunctions():
   
   ## images must have the same shape
   def normCrossCorr(self, defImg):
-    result = 0
+    results = torch.empty(self.imgData.shape[0]*self.imgData.shape[1])
     for imgIdx in range(self.imgData.shape[0]):
       for chanIdx in range(self.imgData.shape[1]):
         x = self.imgData[imgIdx, chanIdx,]
@@ -192,8 +192,8 @@ class LossFunctions():
         x = torch.nn.functional.normalize(x,2,-1)
         y = torch.nn.functional.normalize(y,2,-1)
         dotProd = torch.dot(x,y) + 1
-        result = result + dotProd
-    return 1 - (result / (2 * self.imgData.shape[0] * self.imgData.shape[1]))
+        results[imgIdx * self.imgData.shape[0] + chanIdx] = dotProd
+    return 1 - (torch.sum(results) / (2 * self.imgData.shape[0] * self.imgData.shape[1]))
 
   def vecLength(self, defField):
     tmp0 = defField[:,range(0,defField.shape[1],3),] * defField[:,range(0,defField.shape[1],3),]
