@@ -1,5 +1,5 @@
 import torch
-layers4 = False
+layers4 = True
 useContext = True
 
 numberOfEpochs = 5000

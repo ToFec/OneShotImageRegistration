@@ -163,12 +163,12 @@ class NetOptimizer(object):
     
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
-          
+           
     if imgDataToWork.shape[1] > 2:
       smoothnessLoss =lossCalculator.smoothnessVecFieldT(self.userOpts.device)
     else:
       smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
-      
+       
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
     
@@ -188,6 +188,7 @@ class NetOptimizer(object):
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
+#     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
 #     print('%.5f; %5f; %5f; %.5f' % (crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
