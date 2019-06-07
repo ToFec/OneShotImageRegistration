@@ -4,6 +4,8 @@ import numpy as np
 from math import sqrt
 import torch
 from fileinput import filename
+from scipy.interpolate import griddata
+from __builtin__ import file
 
 class PointReader():
   
@@ -234,6 +236,16 @@ class PointProcessor():
       pointWorldCoord = sitkImg.TransformPhysicalPointToIndex(sitk.VectorDouble([int(point[0]), int(point[1]), int(point[2])]))
       newPoints.append(([pointWorldCoord[0]], [pointWorldCoord[1]], [pointWorldCoord[2]]))
     return newPoints
+  
+  def convertPtsToTxt2(self, filename, referenceImg):
+    sitkImg = sitk.ReadImage(referenceImg)
+    pr = PointReader()
+    newPoints = []
+    points = pr.loadData(filename)
+    for point in points:
+      pointWorldCoord = sitkImg.TransformPhysicalPointToIndex(sitk.VectorDouble([int(point[0]), int(point[1]), int(point[2])]))
+      newPoints.append((pointWorldCoord[0], pointWorldCoord[1], pointWorldCoord[2]))
+    return newPoints  
 
   def convertPoints(self, filename, referenceImg):
     pr = PointReader()
@@ -284,7 +296,7 @@ class PointProcessor():
   
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert', 'deformPoints' ])
+    opts, args = getopt.getopt(argv, '', ['path0=', 'refImg=', 'correctPos', 'path1=', 'calcDiff', 'outputPath=', 'convert', 'deformPoints','visErr' ])
   except getopt.GetoptError as e:#python3
     print(e)
     return
@@ -296,6 +308,7 @@ def main(argv):
   correctPos = False  
   convertPoints = False
   deformPoints = False
+  visualiseError = False
   referenceImg = 0
   for opt, arg in opts:
     if opt == '--path0':
@@ -314,6 +327,8 @@ def main(argv):
       deformPoints = True    
     elif opt == '--refImg':
       referenceImg = arg    
+    elif opt == '--visErr':
+      visualiseError = True 
         
   pointProcessor = PointProcessor()   
   if (correctPos):
@@ -330,7 +345,26 @@ def main(argv):
     logFile.close()
       
   elif(deformPoints): ##ATTENTION: the def field points from output to input therefore we need no take the target landmarks and deform them
-    pointProcessor.deformPoints(filepath0, filepath1, referenceImg)    
+    pointProcessor.deformPoints(filepath0, filepath1, referenceImg) 
+  elif(visualiseError):
+    pointsIdx = pointProcessor.convertPtsToTxt2(filepath0, referenceImg)
+    pointDiffs = []
+    pointDiffFile = open(filepath1,'r') 
+    filename, file_extension = os.path.splitext(referenceImg)
+    for line in pointDiffFile:
+      pointsStr = line.split(';')
+      pointDiff = np.float32(pointsStr[0])
+      pointDiffs.append(pointDiff)
+    
+    sitkImg = sitk.ReadImage(referenceImg)
+    grid_x, grid_y, grid_z = np.mgrid[0:sitkImg.GetSize()[0], 0:sitkImg.GetSize()[1],0:sitkImg.GetSize()[2]]
+    grid = griddata(pointsIdx, pointDiffs, (grid_x, grid_y, grid_z), method='linear')
+    errrImg = sitk.GetImageFromArray( np.swapaxes(grid, -1, 0) )
+    errrImg.SetSpacing( sitkImg.GetSpacing() )
+    errrImg.SetOrigin( sitkImg.GetOrigin() )
+    errrImg.SetDirection( sitkImg.GetDirection() )
+    sitkImg = sitk.WriteImage(errrImg, filename + "Error.nrrd")
+    
   else:
     pointProcessor.convertToFcsv(filepath0)
   

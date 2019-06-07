@@ -21,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -45,7 +45,10 @@ def main(argv):
     elif opt == '--downSampleSteps':
       userOpts.downSampleSteps = int(arg)      
     elif opt == '--cycleW':
-      userOpts.cycleW = float(arg)     
+      userOpts.cycleW = float(arg)
+    elif opt == '--smoothW':
+      stringList = arg.split()
+      userOpts.smoothW = [float(i) for i in stringList]  
       
   torch.manual_seed(0)
   np.random.seed(0)

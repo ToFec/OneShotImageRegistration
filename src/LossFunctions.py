@@ -109,13 +109,13 @@ class LossFunctions():
     
     t = vecField[:,idx+1,:,:].detach()
     loss10 = Utils.getLoss10(vecField.shape, device)
-    loss10[:,idx,:,:] = torch.pow(t -vecField[:,idx,:,:], 2)# * weights
+    loss10[:,idx,:,:] = t -vecField[:,idx,:,:]# * weights
     
     t = vecField[:,idx,:,:].detach()
     loss11 = Utils.getLoss11(vecField.shape, device)
-    loss11[:,idx+1,:,:] = torch.pow(t - vecField[:,idx+1,:,:], 2)# * weights
+    loss11[:,idx+1,:,:] = t - vecField[:,idx+1,:,:]# * weights
     loss1 = (loss10 + loss11) / self.dimWeight[0]
-    
+     
     return loss1
   
   def getSmoothnessForDir2(self, imgidx, device):
@@ -124,11 +124,11 @@ class LossFunctions():
     
     t = vecField[:,:,idx+1,:].detach()
     loss20 = Utils.getLoss20(vecField.shape, device)
-    loss20[:,:,idx,:] = torch.pow(t - vecField[:,:,idx,:], 2)# * weights
+    loss20[:,:,idx,:] = t - vecField[:,:,idx,:]# * weights
     
     t = vecField[:,:,idx,:].detach()
     loss21 = Utils.getLoss21(vecField.shape, device)
-    loss21[:,:,idx+1,:] = torch.pow(t - vecField[:,:,idx+1,:], 2)# * weights
+    loss21[:,:,idx+1,:] = t - vecField[:,:,idx+1,:]# * weights
     loss2 = (loss20 + loss21) / self.dimWeight[1]
     return loss2
   
@@ -138,11 +138,11 @@ class LossFunctions():
     
     t = vecField[:,:,:,idx+1].detach()
     loss30 = Utils.getLoss30(vecField.shape, device)
-    loss30[:,:,:,idx] = torch.pow(t - vecField[:,:,:,idx], 2)# * weights
+    loss30[:,:,:,idx] = t - vecField[:,:,:,idx]# * weights
     
     t = vecField[:,:,:,idx].detach()
     loss31 = Utils.getLoss31(vecField.shape, device)
-    loss31[:,:,:,idx+1] = torch.pow(t - vecField[:,:,:,idx+1], 2)# * weights
+    loss31[:,:,:,idx+1] = t - vecField[:,:,:,idx+1]# * weights
     loss3 = (loss30 + loss31) / self.dimWeight[2]
     return loss3
   
@@ -154,10 +154,10 @@ class LossFunctions():
       loss1 = self.getSmoothnessForDir1(imgIdx, device)
       
       loss2 = self.getSmoothnessForDir2(imgIdx, device)
-      
+#        
       loss3 = self.getSmoothnessForDir3(imgIdx, device)
       
-      loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
+      loss[imgIdx] = torch.sum(torch.pow(loss1 + loss2 + loss3,2)) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3])
     return loss.sum() / self.defFields.shape[0]
 
   def smoothnessVecFieldT(self, device):

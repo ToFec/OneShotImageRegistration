@@ -419,6 +419,17 @@ class Optimize():
               currDefField = currDefField * upSampleRate
               currDefField = sampleImg(currDefField, upSampleRate)
               
+              upSampleRate = 1 / nextSamplingRate
+              tmpDefField = sampleImg(currDefField * upSampleRate, upSampleRate)
+              dataSetSpacing = dataloader.dataset.getSpacing(i)
+              dataSetDirCosines = dataloader.dataset.getDirectionCosines(i)
+              defX = tmpDefField[0, 1 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+              defY = tmpDefField[0, 1 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+              defZ = tmpDefField[0, 1 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
+              defField = getDefField(defX, defY, defZ)
+              defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
+              dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset0image0channel10sampleIdx' + str(int(upSampleRate*100)) + '.nrrd', i, False)
+              
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         if not self.userOpts.usePaddedNet:
