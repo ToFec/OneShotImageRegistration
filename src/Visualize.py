@@ -42,7 +42,7 @@ def main(argv):
   
   try:
     opts, args = getopt.getopt(argv, '', ['csvFile='])
-  except getopt.GetoptError, e:
+  except getopt.GetoptError as e:
     print(e)
     return
     

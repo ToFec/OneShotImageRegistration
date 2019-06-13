@@ -152,9 +152,9 @@ class NetOptimizer(object):
       
     currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = addedField.detach()
 
-    cropStart0 = (imgDataToWork.shape[2]-defFields.shape[2])/2
-    cropStart1 = (imgDataToWork.shape[3]-defFields.shape[3])/2
-    cropStart2 = (imgDataToWork.shape[4]-defFields.shape[4])/2
+    cropStart0 = int((imgDataToWork.shape[2]-defFields.shape[2])/2)
+    cropStart1 = int((imgDataToWork.shape[3]-defFields.shape[3])/2)
+    cropStart2 = int((imgDataToWork.shape[4]-defFields.shape[4])/2)
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+defFields.shape[2], cropStart1:cropStart1+defFields.shape[3], cropStart2:cropStart2+defFields.shape[4]]
 
     lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currDefFields, self.spacing)
@@ -205,5 +205,21 @@ class NetOptimizer(object):
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
           
     loss.backward()
+    if printLoss:
+      maxNorm = 0.0
+      maxVal = 0.0
+      total_norm = 0
+      for p in self.net.parameters():
+        param_norm = p.grad.data.norm(2.0)
+        param_val = p.grad.data.max()
+        if param_norm > maxNorm:
+          maxNorm = param_norm
+        if param_val > maxVal:
+          maxVal = param_val
+        total_norm += param_norm.item() ** 2.0
+        total_norm = total_norm ** (1. / 2.0)
+        
+      print(total_norm, maxNorm, maxVal)
+      torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1.0)
     self.optimizer.step()
     return loss        

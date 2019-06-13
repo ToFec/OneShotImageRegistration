@@ -42,7 +42,7 @@ else:
   stoptAtSampleStep=3
   boundarySmoothnessW=(0.0,0.1,0.1)
   smoothW = (0.0001,0.0001,0.0001)
-  cycleW = 0.01
+  cycleW = 0.00
   lossTollerances=(0.00001,)
   useMedianForSampling = (False,False,True)
 

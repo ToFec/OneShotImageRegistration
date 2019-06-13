@@ -5,7 +5,6 @@ from math import sqrt
 import torch
 from fileinput import filename
 from scipy.interpolate import griddata
-from __builtin__ import file
 
 class PointReader():
   

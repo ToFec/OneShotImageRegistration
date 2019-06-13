@@ -26,7 +26,7 @@ class Optimize():
     self.finalNumberIterations = [0,0]
     
     logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
-    self.logFile = open(logfileName,'w', buffering=0)
+    self.logFile = open(logfileName,'w')
     
   def __enter__(self):
         return self
@@ -256,6 +256,7 @@ class Optimize():
                   meanLoss = runningLoss.mean()
                   self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx))
                   self.logFile.write('\n')
+                  self.logFile.flush()
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0)):
                     netStateDicts[patchIdx] = copy.deepcopy(self.net.state_dict())
@@ -335,6 +336,22 @@ class Optimize():
         newIdx[5] = newIdx[5] + i + 1
         break
     return newIdx, offset
+   
+  def printParameterInfo(self):
+      maxNorm = 0.0
+      maxVal = 0.0
+      total_norm = 0
+      for p in self.net.parameters():
+        param_norm = p.grad.data.norm(2.0)
+        param_val = p.grad.data.max()
+        if param_norm > maxNorm:
+          maxNorm = param_norm
+        if param_val > maxVal:
+          maxVal = param_val
+        total_norm += param_norm.item() ** 2.0
+        total_norm = total_norm ** (1. / 2.0)
+        
+      print(total_norm, maxNorm, maxVal)
          
   def trainTestNetDownSamplePatch(self, dataloader):
       if self.userOpts.trainTillConvergence:
@@ -386,7 +403,7 @@ class Optimize():
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
               optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
               netOptim.setOptimizer(optimizer)
-              if (patchIdx > 12 and patchIdx < 19):
+              if (samplingRateIdx > 1):
                 printLoss = True
                 self.userOpts.ccW = 0.0
                 self.userOpts.cycleW = 1.0
@@ -406,11 +423,14 @@ class Optimize():
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
                 loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLoss)
+                if printLoss:
+                  self.printParameterInfo()
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
                   meanLoss = runningLoss.mean()
                   self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
+                  self.logFile.flush()
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
                     break
@@ -521,6 +541,7 @@ class Optimize():
               if (datasetIterationValidation(detachLoss, meanLoss, imgIteration, numberOfiterations, 0)):
                 break
               self.logFile.write(str(float(meanLoss)) + ';')
+              self.logFile.flush()
               lossCounter = 0
             else:
               lossCounter+=1
