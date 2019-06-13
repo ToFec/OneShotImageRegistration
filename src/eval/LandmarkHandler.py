@@ -358,25 +358,6 @@ def main(argv):
       
     sitkImg = sitk.ReadImage(referenceImg)
     
-    pointsIdx.append((0,0,sitkImg.GetSize()[2]-1))
-    pointsIdx.append((0,sitkImg.GetSize()[1]-1,sitkImg.GetSize()[2]-1))
-    pointsIdx.append((sitkImg.GetSize()[0]-1,sitkImg.GetSize()[1]-1,sitkImg.GetSize()[2]-1))
-    pointsIdx.append((sitkImg.GetSize()[0]-1,0,sitkImg.GetSize()[2]-1))
-    pointsIdx.append((sitkImg.GetSize()[0]-1,sitkImg.GetSize()[1]-1,0))
-    pointsIdx.append((0,0,0))
-    pointsIdx.append((0,sitkImg.GetSize()[1]-1,))
-    pointsIdx.append((sitkImg.GetSize()[0]-1,0,0))
-    
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    pointDiffs.append(0.0)
-    
-    
     grid_x, grid_y, grid_z = np.mgrid[0:sitkImg.GetSize()[0], 0:sitkImg.GetSize()[1],0:sitkImg.GetSize()[2]]
     grid = griddata(pointsIdx, pointDiffs, (grid_x, grid_y, grid_z), method='linear')
     errrImg = sitk.GetImageFromArray( np.swapaxes(grid, -1, 0) )

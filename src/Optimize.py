@@ -345,13 +345,13 @@ class Optimize():
       numberOfiterations = self.userOpts.numberOfEpochs
       
       receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
-      
+      printLoss = False
       for i, data in enumerate(dataloader, 0):
         torch.manual_seed(0)
         torch.cuda.manual_seed(0)
         np.random.seed(0)
         self.net.reset_params()
-        optimizer = optim.Adam(self.net.parameters())
+        optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
         
         start = time.time()
         netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
@@ -380,10 +380,19 @@ class Optimize():
           
           for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
-          
+            
             lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+              optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+              netOptim.setOptimizer(optimizer)
+              if (patchIdx > 12 and patchIdx < 19):
+                printLoss = True
+                self.userOpts.ccW = 0.0
+                self.userOpts.cycleW = 1.0
+                netOptim.setUserOpts(self.userOpts)
+              else:
+                printLoss = False
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
@@ -396,7 +405,7 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx)
+                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLoss)
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
@@ -419,16 +428,16 @@ class Optimize():
               currDefField = currDefField * upSampleRate
               currDefField = sampleImg(currDefField, upSampleRate)
               
-              upSampleRate = 1 / nextSamplingRate
-              tmpDefField = sampleImg(currDefField * upSampleRate, upSampleRate)
-              dataSetSpacing = dataloader.dataset.getSpacing(i)
-              dataSetDirCosines = dataloader.dataset.getDirectionCosines(i)
-              defX = tmpDefField[0, 1 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
-              defY = tmpDefField[0, 1 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
-              defZ = tmpDefField[0, 1 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
-              defField = getDefField(defX, defY, defZ)
-              defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-              dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset0image0channel10sampleIdx' + str(int(upSampleRate*100)) + '.nrrd', i, False)
+#               upSampleRate = 1 / nextSamplingRate
+#               tmpDefField = sampleImg(currDefField * upSampleRate, upSampleRate)
+#               dataSetSpacing = dataloader.dataset.getSpacing(i)
+#               dataSetDirCosines = dataloader.dataset.getDirectionCosines(i)
+#               defX = tmpDefField[0, 1 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+#               defY = tmpDefField[0, 1 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+#               defZ = tmpDefField[0, 1 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
+#               defField = getDefField(defX, defY, defZ)
+#               defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
+#               dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset0image0channel10sampleIdx' + str(int(upSampleRate*100)) + '.nrrd', i, False)
               
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')

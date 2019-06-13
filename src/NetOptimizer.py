@@ -15,6 +15,12 @@ class NetOptimizer(object):
       self.cycleLossCalculationMethod = self.cycleLossCalculationsNearestNeighbor
     else:
       self.cycleLossCalculationMethod = self.cycleLossCalculations
+
+  def setOptimizer(self, optimizer):
+    self.optimizer = optimizer
+    
+  def setUserOpts(self, options):
+    self.userOpts = options
         
   def normalizeWeights(self, ccW, sW, cyW):
     weightSum = ccW + sW + cyW
@@ -136,7 +142,7 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,1,] += tmpField
     zeroIndices[4][:,None,2,] += tmpField 
             
-  def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0):
+  def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
@@ -173,23 +179,25 @@ class NetOptimizer(object):
     
     
     imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
-    cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
-     
-    zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)
-    
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
       deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
-      
+
+    cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
+    zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)    
+    for chanIdx in range(imgDataToWork.shape[1] - 1, -1, -1):
+      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
       self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, currDefFields, idx)
    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
-#     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF
-    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
+    loss = crossCorrWeight * crossCorr + self.userOpts.cycleW * cycleLoss
+#     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+    if printLoss:
+      print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
 #     print('%.5f; %5f; %5f; %.5f' % (crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
 #     print('cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorr, smoothnessDF, cycleLoss))
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))

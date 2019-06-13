@@ -40,8 +40,8 @@ else:
   ccW=1.0
   downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
   stoptAtSampleStep=3
-  boundarySmoothnessW=(0.0,1.0,1.0)
-  smoothW = (0.001,0.001,0.001)
+  boundarySmoothnessW=(0.0,0.1,0.1)
+  smoothW = (0.0001,0.0001,0.0001)
   cycleW = 0.01
   lossTollerances=(0.00001,)
   useMedianForSampling = (False,False,True)
