@@ -27,7 +27,7 @@ class NetOptimizer(object):
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
 
 
-  def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx):
+  def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx, borderCrossingArry=None):
     fieldsIdxs4 = zeroIndices[4].round().long()
     fieldsIdxs3 = zeroIndices[3].round().long()
     fieldsIdxs2 = zeroIndices[2].round().long()
@@ -39,20 +39,18 @@ class NetOptimizer(object):
       fieldsIdxs3 += idx[1]
       fieldsIdxs2 += idx[0]
     else:
-      currentAndActualField = torch.empty(defFields.shape[0],defFields.shape[1],defFields.shape[2]+2,defFields.shape[3]+2,defFields.shape[4]+2, device=defFields.device)
-      currentAndActualField[:] = 10000
-      currentAndActualField[:,:,1:defFields.shape[2]+1,1:defFields.shape[3]+1,1:defFields.shape[4]+1] = defFields
-      fieldsIdxs4 += 1
-      fieldsIdxs3 += 1
-      fieldsIdxs2 += 1
+      currentAndActualField = defFields
     
-    fieldsIdxs4[fieldsIdxs4 > defFields.shape[4]] = currentAndActualField.shape[4] - 1
+    boolMask = (((fieldsIdxs4 > (currentAndActualField.shape[4] - 1)) | (fieldsIdxs4 < 0)) | ((fieldsIdxs3 > (currentAndActualField.shape[3] - 1)) | (fieldsIdxs3 < 0)) | ((fieldsIdxs2 > (currentAndActualField.shape[2] - 1)) | (fieldsIdxs2 < 0)))
+    borderCrossingArry[boolMask] = 1
+    
+    fieldsIdxs4[fieldsIdxs4 > (currentAndActualField.shape[4] - 1)] = currentAndActualField.shape[4] - 1
     fieldsIdxs4[fieldsIdxs4 < 0] = 0
     
-    fieldsIdxs3[fieldsIdxs3 > defFields.shape[3]] = currentAndActualField.shape[3] - 1
+    fieldsIdxs3[fieldsIdxs3 > (currentAndActualField.shape[3] - 1)] = currentAndActualField.shape[3] - 1
     fieldsIdxs3[fieldsIdxs3 < 0] = 0
     
-    fieldsIdxs2[fieldsIdxs2 > defFields.shape[2]] = currentAndActualField.shape[2] - 1
+    fieldsIdxs2[fieldsIdxs2 > (currentAndActualField.shape[2] - 1)] = currentAndActualField.shape[2] - 1
     fieldsIdxs2[fieldsIdxs2 < 0] = 0
     
     fields0 = zeroIndices[0]
@@ -194,14 +192,15 @@ class NetOptimizer(object):
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
 
     cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
-    zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)    
+    zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)
+    outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.uint8, device=self.userOpts.device)
     if self.userOpts.cycleW > 0.0:
       for chanIdx in range(imgDataToWork.shape[1] - 1, -1, -1):
         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
-        self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, None, idx)
+        self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, None, idx, outOfBoundsTensor)
    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
-    cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
+    cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
 #     loss = crossCorrWeight * crossCorr + self.userOpts.cycleW * cycleLoss
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    

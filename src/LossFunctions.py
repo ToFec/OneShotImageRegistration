@@ -25,23 +25,28 @@ class LossFunctions():
       return loss
 
   #TODO:   
-  def cycleLoss(self, vecFields, device0):
+  def cycleLoss(self, vecFields,outOfBoundsTensor, device0):
     loss = torch.empty(vecFields.shape[0], device=device0)
     for imgIdx in range(vecFields.shape[0]):
       vecField = vecFields[imgIdx]
+      oOBT = outOfBoundsTensor[imgIdx]
        
       dir0Idx = range(0,vecField.shape[0], 3)
       dir1Idx = range(1,vecField.shape[0], 3)
       dir2Idx = range(2,vecField.shape[0], 3)
        
       dir0Sum = torch.sum(vecField[dir0Idx,],dim=0)
+      dir0Sum[oOBT[0,:]] = 0
       dir1Sum = torch.sum(vecField[dir1Idx,],dim=0)
+      dir1Sum[oOBT[1,:]] = 0
       dir2Sum = torch.sum(vecField[dir2Idx,],dim=0)
-      dir0Sum[dir0Sum > 1000] = 0.0
-      dir1Sum[dir0Sum > 1000] = 0.0
-      dir2Sum[dir0Sum > 1000] = 0.0
+      dir2Sum[oOBT[2,:]] = 0
        
-      loss[imgIdx] = torch.mean(torch.pow(dir0Sum,2) + torch.pow(dir1Sum,2) + torch.pow(dir2Sum,2))
+      dir0Pow = torch.pow(dir0Sum, 2)
+      dir1Pow = torch.pow(dir1Sum, 2)
+      dir2Pow = torch.pow(dir2Sum, 2)
+       
+      loss[imgIdx] = torch.mean(dir0Pow + dir1Pow + dir2Pow)
     return loss.sum() / vecFields.shape[0]
   
 
