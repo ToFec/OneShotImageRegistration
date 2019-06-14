@@ -39,15 +39,20 @@ class NetOptimizer(object):
       fieldsIdxs3 += idx[1]
       fieldsIdxs2 += idx[0]
     else:
-      currentAndActualField = defFields
+      currentAndActualField = torch.empty(defFields.shape[0],defFields.shape[1],defFields.shape[2]+2,defFields.shape[3]+2,defFields.shape[4]+2, device=defFields.device)
+      currentAndActualField[:] = 10000
+      currentAndActualField[:,:,1:defFields.shape[2]+1,1:defFields.shape[3]+1,1:defFields.shape[4]+1] = defFields
+      fieldsIdxs4 += 1
+      fieldsIdxs3 += 1
+      fieldsIdxs2 += 1
     
-    fieldsIdxs4[fieldsIdxs4 > (currentAndActualField.shape[4] - 1)] = currentAndActualField.shape[4] - 1
+    fieldsIdxs4[fieldsIdxs4 > defFields.shape[4]] = currentAndActualField.shape[4] - 1
     fieldsIdxs4[fieldsIdxs4 < 0] = 0
     
-    fieldsIdxs3[fieldsIdxs3 > (currentAndActualField.shape[3] - 1)] = currentAndActualField.shape[3] - 1
+    fieldsIdxs3[fieldsIdxs3 > defFields.shape[3]] = currentAndActualField.shape[3] - 1
     fieldsIdxs3[fieldsIdxs3 < 0] = 0
     
-    fieldsIdxs2[fieldsIdxs2 > (currentAndActualField.shape[2] - 1)] = currentAndActualField.shape[2] - 1
+    fieldsIdxs2[fieldsIdxs2 > defFields.shape[2]] = currentAndActualField.shape[2] - 1
     fieldsIdxs2[fieldsIdxs2 < 0] = 0
     
     fields0 = zeroIndices[0]
@@ -73,6 +78,9 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,1,] += tmpField
     zeroIndices[4][:,None,2,] += tmpField 
 
+#
+###deprecated
+#
   def cycleLossCalculations(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx):
     
     fieldsLow4 = zeroIndices[4].trunc()
@@ -187,15 +195,16 @@ class NetOptimizer(object):
 
     cycleImgData = Utils.getCycleImgData(defFields.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
     zeroIndices = Utils.getZeroIdxField(defFields.shape, self.userOpts.device)    
-    for chanIdx in range(imgDataToWork.shape[1] - 1, -1, -1):
-      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
-      self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, currDefFields, idx)
+    if self.userOpts.cycleW > 0.0:
+      for chanIdx in range(imgDataToWork.shape[1] - 1, -1, -1):
+        chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
+        self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, None, idx)
    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData, self.userOpts.device)
     
-    loss = crossCorrWeight * crossCorr + self.userOpts.cycleW * cycleLoss
-#     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+#     loss = crossCorrWeight * crossCorr + self.userOpts.cycleW * cycleLoss
+    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
     if printLoss:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
 #     print('%.5f; %5f; %5f; %.5f' % (crossCorr, smoothnessLoss, boundaryLoss, cycleLoss))
@@ -205,21 +214,5 @@ class NetOptimizer(object):
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
           
     loss.backward()
-    if printLoss:
-      maxNorm = 0.0
-      maxVal = 0.0
-      total_norm = 0
-      for p in self.net.parameters():
-        param_norm = p.grad.data.norm(2.0)
-        param_val = p.grad.data.max()
-        if param_norm > maxNorm:
-          maxNorm = param_norm
-        if param_val > maxVal:
-          maxVal = param_val
-        total_norm += param_norm.item() ** 2.0
-        total_norm = total_norm ** (1. / 2.0)
-        
-      print(total_norm, maxNorm, maxVal)
-      torch.nn.utils.clip_grad_norm_(self.net.parameters(), 1.0)
     self.optimizer.step()
     return loss        

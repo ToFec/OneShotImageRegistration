@@ -265,7 +265,7 @@ def compareDicts(dict1, dict2):
 
 def printHash(obj):
   h=pickle.dumps(obj)
-#   print hash(h)
+  print hash(h)
   
 def numpyRepeat(obj, times):
   objShape = obj.shape

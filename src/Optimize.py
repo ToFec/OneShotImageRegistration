@@ -304,7 +304,7 @@ class Optimize():
   def getSubCurrDefFieldIdx(self, currDeffield, idx):
     newIdx = list(idx)
     offset = [0,0,0]
-    radius = 15
+    radius = 1
     for i in range(radius,-1,-1):
       if idx[0] > 0:
         newIdx[0] = idx[0] - 1 - i
@@ -341,9 +341,11 @@ class Optimize():
       maxNorm = 0.0
       maxVal = 0.0
       total_norm = 0
+      dataMean = []
       for p in self.net.parameters():
+        dataMean.append(float(p.data.mean()))
         param_norm = p.grad.data.norm(2.0)
-        param_val = p.grad.data.max()
+        param_val = p.grad.data.abs().max()
         if param_norm > maxNorm:
           maxNorm = param_norm
         if param_val > maxVal:
@@ -352,6 +354,7 @@ class Optimize():
         total_norm = total_norm ** (1. / 2.0)
         
       print(total_norm, maxNorm, maxVal)
+#       print(dataMean)
          
   def trainTestNetDownSamplePatch(self, dataloader):
       if self.userOpts.trainTillConvergence:
@@ -401,15 +404,17 @@ class Optimize():
             lastDeffield = currDefField.clone()
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-              optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
-              netOptim.setOptimizer(optimizer)
-              if (samplingRateIdx > 1):
-                printLoss = True
+
+              if (samplingRateIdx > 1) and (patchIdx > 0):
+                print("loaded old module")
                 self.userOpts.ccW = 0.0
                 self.userOpts.cycleW = 1.0
                 netOptim.setUserOpts(self.userOpts)
               else:
                 printLoss = False
+                
+              optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+              netOptim.setOptimizer(optimizer)
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
@@ -447,17 +452,6 @@ class Optimize():
               upSampleRate = nextSamplingRate / samplingRate
               currDefField = currDefField * upSampleRate
               currDefField = sampleImg(currDefField, upSampleRate)
-              
-#               upSampleRate = 1 / nextSamplingRate
-#               tmpDefField = sampleImg(currDefField * upSampleRate, upSampleRate)
-#               dataSetSpacing = dataloader.dataset.getSpacing(i)
-#               dataSetDirCosines = dataloader.dataset.getDirectionCosines(i)
-#               defX = tmpDefField[0, 1 * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
-#               defY = tmpDefField[0, 1 * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
-#               defZ = tmpDefField[0, 1 * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
-#               defField = getDefField(defX, defY, defZ)
-#               defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
-#               dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset0image0channel10sampleIdx' + str(int(upSampleRate*100)) + '.nrrd', i, False)
               
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')

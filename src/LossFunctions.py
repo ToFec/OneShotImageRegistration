@@ -34,11 +34,14 @@ class LossFunctions():
       dir1Idx = range(1,vecField.shape[0], 3)
       dir2Idx = range(2,vecField.shape[0], 3)
        
-      dir0Sum = torch.pow(torch.sum(vecField[dir0Idx,],dim=0), 2)
-      dir1Sum = torch.pow(torch.sum(vecField[dir1Idx,],dim=0), 2)
-      dir2Sum = torch.pow(torch.sum(vecField[dir2Idx,],dim=0), 2)
+      dir0Sum = torch.sum(vecField[dir0Idx,],dim=0)
+      dir1Sum = torch.sum(vecField[dir1Idx,],dim=0)
+      dir2Sum = torch.sum(vecField[dir2Idx,],dim=0)
+      dir0Sum[dir0Sum > 1000] = 0.0
+      dir1Sum[dir0Sum > 1000] = 0.0
+      dir2Sum[dir0Sum > 1000] = 0.0
        
-      loss[imgIdx] = torch.mean(dir0Sum + dir1Sum + dir2Sum)
+      loss[imgIdx] = torch.mean(torch.pow(dir0Sum,2) + torch.pow(dir1Sum,2) + torch.pow(dir2Sum,2))
     return loss.sum() / vecFields.shape[0]
   
 
