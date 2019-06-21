@@ -405,7 +405,7 @@ class Optimize():
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 
-              if (samplingRateIdx > 1) and (patchIdx > 0):
+              if (samplingRateIdx > 1) and (patchIdx > -1):
                 print("loaded old module")
                 self.userOpts.ccW = 0.0
                 self.userOpts.cycleW = 1.0
