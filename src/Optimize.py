@@ -365,7 +365,7 @@ class Optimize():
       numberOfiterations = self.userOpts.numberOfEpochs
       
       receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
-      printLoss = False
+      printLossAndCropGrads = False
       for i, data in enumerate(dataloader, 0):
         torch.manual_seed(0)
         torch.cuda.manual_seed(0)
@@ -405,14 +405,6 @@ class Optimize():
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 
-              if (samplingRateIdx > 1) and (patchIdx > -1):
-                print("loaded old module")
-                self.userOpts.ccW = 0.0
-                self.userOpts.cycleW = 1.0
-                netOptim.setUserOpts(self.userOpts)
-              else:
-                printLoss = False
-                
               optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
               netOptim.setOptimizer(optimizer)
               
@@ -427,8 +419,8 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLoss)
-                if printLoss:
+                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
+                if printLossAndCropGrads:
                   self.printParameterInfo()
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
