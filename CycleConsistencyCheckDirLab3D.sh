@@ -12,7 +12,7 @@ pointName="${startTimeBin}0"
 
 for i in $iterationRange
 do
-python src/eval/LandmarkHandler.py --path0=resources/DirLab3DEval/Case"${datasetNumberP1}"/"${pointName}".pts --path1=results/DirLab3DEvalTmp/deformationFieldDataset"${dataSetNumber}"image0channel"${i}".nrrd --deformPoints
+python src/eval/LandmarkHandler.py --path0=resources/DirLab3DEval/Case"${datasetNumberP1}"/"${pointName}".pts --path1=results/DirLab3DEval/deformationFieldDataset"${dataSetNumber}"image0channel"${i}".nrrd --deformPoints
 pointName="${pointName}deformed"
 
 if [ $i -eq "-1" ]
