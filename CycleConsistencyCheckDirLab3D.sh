@@ -24,5 +24,6 @@ python src/eval/LandmarkHandler.py --path0=resources/DirLab3DEval/Case"${dataset
 
 done
 
+find resources/DirLab3DEval/ -name '*deformed.pts' -exec rm {} \;
 
 exit 0

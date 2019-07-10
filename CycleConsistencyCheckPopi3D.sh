@@ -26,5 +26,6 @@ python src/eval/LandmarkHandler.py --path0=resources/Popi3DEval/Popi0"${datasetN
 
 done
 
+find resources/Popi3DEval/ -name '*deformed.pts' -exec rm {} \;
 
 exit 0

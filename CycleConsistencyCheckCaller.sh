@@ -13,6 +13,20 @@ done
 
 done
 
+exit 0
+
+
+echo "Dirlab Start" >> distances.csv
+
+for i in {0..9}
+do
+./CycleConsistencyCheckDirLab2.sh 0 10 $i
+./CycleConsistencyCheckDirLab2.sh 1 10 $i
+./CycleConsistencyCheckDirLab2.sh 2 10 $i
+./CycleConsistencyCheckDirLab2.sh 3 10 $i
+./CycleConsistencyCheckDirLab2.sh 4 10 $i
+./CycleConsistencyCheckDirLab2.sh 5 10 $i
+done
 
 echo "Popi Start" >> distances.csv
 for i in {0..5}
@@ -28,16 +42,4 @@ done
 
 done
 
-exit 0
 
-echo "Dirlab Start" >> distances.csv
-
-for i in {0..9}
-do
-./CycleConsistencyCheckDirLab2.sh 0 10 $i
-./CycleConsistencyCheckDirLab2.sh 1 10 $i
-./CycleConsistencyCheckDirLab2.sh 2 10 $i
-./CycleConsistencyCheckDirLab2.sh 3 10 $i
-./CycleConsistencyCheckDirLab2.sh 4 10 $i
-./CycleConsistencyCheckDirLab2.sh 5 10 $i
-done

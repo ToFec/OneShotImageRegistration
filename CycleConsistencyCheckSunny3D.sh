@@ -35,5 +35,6 @@ python src/eval/EvalBinaryImage.py -f results/SunnyBrook3D/origLabelDataset${dat
 
 done
 
+rm results/SunnyBrook3D/*def.nrrd
 
 exit 0

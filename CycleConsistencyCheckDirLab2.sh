@@ -23,5 +23,6 @@ echo "" >> distances.csv
 fi
 done
 
+find resources/DirLab4DEval/ -name '*deformed.pts' -exec rm {} \; 
 
 exit 0

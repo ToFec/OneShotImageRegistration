@@ -435,6 +435,7 @@ class Optimize():
                   lossCounter+=1
                 patchIteration+=1
               currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
+              
           with torch.no_grad():
             if samplingRate < 1:
               if samplingRateIdx+1 == len(samplingRates):

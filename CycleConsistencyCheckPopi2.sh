@@ -32,5 +32,7 @@ fi
 
 done
 
+find resources/Popi4DEval/ -name '*deformed.pts' -exec rm {} \; 
+
 
 exit 0
