@@ -3,8 +3,7 @@ One Shot Deformable Medical Image Registration
 
 a description of this work can be found here: https://arxiv.org/abs/1907.04641
 
-to start registration call
-
+**to start a registration call:**
 python src/OnePatchShot.py --trainingFiles=PATH_TO_INPUT_CSV_FILE  --outputPath=OUTPUT_PATH
 
 the input csv file contains a list of folders; each folder represents a separate registration task; the image files in the folders must follow the following naming scheme: 
@@ -15,7 +14,7 @@ second image: img1.FILE_FORMAT
 
 the currently supported FILE_FORMATs are .nrrd and .nii.gz
 
-an example can be found in resources/Noise.csv
+an example csv file and image folder can be found in the resources folder
 
 the input folders can also contain segmentations or landmarks. segmentations and landmarks will be deformed with the deformation fields calculated for the appropriate images. the naming convention is as follows: 
 
