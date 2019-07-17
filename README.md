@@ -23,6 +23,11 @@ the input folders can also contain segmentations or landmarks. segmentations and
 
 the .pts format is described here: https://www.creatis.insa-lyon.fr/rio/dir_validation_data
 
+### Loss Visualisation
+
+in the optimisation process a loss file is constantly updated with the current value of the loss function. The file is named lossLog.csv and saved in the output folder. With the following command the loss progress can be visualised:  
+
+python src/Visualize.py --csvFile=OUTPUT_FOLDER/lossLog.csv
 
 
 a more detailed description and manual will follow as soon as possible; in case of any questions feel free to contact me
