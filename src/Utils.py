@@ -152,8 +152,8 @@ def getLoss31(vecFieldShape, device):
   else:
     return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
-def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
-    smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)
+def smoothArray3D(inputArray, nrOfFilters=2, variance = 2, kernelSize = 5):
+    smoothing = GaussianSmoothing(1, kernelSize, variance, 3)
     padVal = int(kernelSize / 2)
     input = inputArray[None, None, ]
     for i in range(0,nrOfFilters):

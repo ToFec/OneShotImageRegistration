@@ -11,6 +11,7 @@ from torch.utils.data import dataloader
 from eval.LandmarkHandler import PointProcessor, PointReader
 import NetOptimizer
 from Sampler import Sampler
+import ScalingAndSquaring as sas
 
 import time
 import os
@@ -245,6 +246,7 @@ class Optimize():
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 
+              
               optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
               netOptim.setOptimizer(optimizer)
               
@@ -292,6 +294,13 @@ class Optimize():
           data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
         currDefField = currDefField.to(self.userOpts.device)
-        self.saveResults(data, currDefField, dataloader, i)                  
+        
+        if self.userOpts.diffeomorphicRegistration:
+          scalingSquaring = sas.ScalingAndSquaring()
+          deformationField = scalingSquaring(currDefField)
+        else:
+          deformationField = currDefField
+        
+        self.saveResults(data, deformationField, dataloader, i)                  
 
 

@@ -10,7 +10,7 @@ from Optimize import Optimize
 
 import time
 
-from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
 from Net import UNet
 import Options as userOpts
 

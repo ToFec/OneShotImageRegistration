@@ -7,6 +7,8 @@ from DecoderBrick import DecoderBrick
 from SelfSupervisionBrick import SelfSupervisionBrick
 
 from numpy import power
+from ScalingAndSquaring import ScalingAndSquaring
+from GaussSmoothing import GaussianSmoothing
 
 class UNet(nn.Module):
   def __init__(self, in_channels=2, useBatchNorm=True, concatLayer=True, depth = 5, numberOfFiltersFirstLayer=32, useDeepSelfSupervision = False, padImg=True):
@@ -55,7 +57,6 @@ class UNet(nn.Module):
           offset += 2* power(offsetBase,2+j)
         self.receptiveFieldOffsets[i] = offset
     
-    
     self.reset_params()   
     
 
@@ -87,6 +88,7 @@ class UNet(nn.Module):
     
     x = torch.stack(outputFields)
     tmp = torch.sum(x, dim = 0)
+    
     return tmp
   
 
