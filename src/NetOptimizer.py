@@ -216,7 +216,7 @@ class NetOptimizer(object):
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
-    if True:
+    if printLoss:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessLoss, deformationField.min(), deformationField.max()))
     torch.cuda.empty_cache()
           
