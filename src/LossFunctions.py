@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import Utils
+import GaussSmoothing as gs
 
 class LossFunctions():
   
@@ -9,6 +10,11 @@ class LossFunctions():
     self.defFields = defFields
     self.currDefFields = currDefFields
     self.dimWeight = spacing
+    
+    self.gaussSmothingKernels = []
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3))
 
   def dice_coeff(self, y_true, y_pred):
     smooth = 1.
@@ -23,6 +29,17 @@ class LossFunctions():
   def dice_loss(self, y_true, y_pred):
       loss = 1 - self.dice_coeff(y_true, y_pred)
       return loss
+    
+#     Weakly-supervised convolutional neural networks for multimodal image registration
+  def multiScaleDiceLoss(self, y_true, y_pred):
+    currDscLoss = self.dice_loss(y_true, y_pred)
+    for gaussKernel in self.gaussSmothingKernels:
+      trueSmooth = gaussKernel(y_true)
+      predSmooth = gaussKernel(y_pred)
+      currDscLoss = currDscLoss + self.dice_loss(trueSmooth, predSmooth)
+      
+    return currDscLoss / (len(self.gaussSmothingKernels) + 1.0)
+      
 
   #TODO:   
   def cycleLoss(self, vecFields,outOfBoundsTensor, device0):

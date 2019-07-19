@@ -20,14 +20,12 @@ patchSize=(80,80,80)
 ccW=1.0
 downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
 stoptAtSampleStep=3
-if diffeomorphicRegistration:
-  boundarySmoothnessW=(0.0,0.1,0.1)
+boundarySmoothnessW=(0.0,0.1,0.1)
+cycleW = 0.01
+if not diffeomorphicRegistration:
   smoothW = (0.0001,0.0001,0.0001)
-  cycleW = 0.01
 else:
-  boundarySmoothnessW=(0.0,0.1,0.1)
-  smoothW = (0.01,0.01,0.01)
-  cycleW = 0.01
+  smoothW = (0.0005,0.0005,0.0005)
 lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
 
