@@ -25,7 +25,7 @@ cycleW = 0.01
 if not diffeomorphicRegistration:
   smoothW = (0.0001,0.0001,0.0001)
 else:
-  smoothW = (0.0005,0.0005,0.0005)
+  smoothW = (0.0001,0.0001,0.0001)
 lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
 
