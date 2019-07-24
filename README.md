@@ -16,12 +16,14 @@ the currently supported FILE_FORMATs are .nrrd and .nii.gz
 
 an example csv file and image folder can be found in the resources folder
 
-the input folders can also contain segmentations or landmarks. segmentations and landmarks will be deformed with the deformation fields calculated for the appropriate images. the naming convention is as follows: 
+the input folders can also contain segmentations and/or masks. landmarks will be deformed with the deformation fields calculated for the appropriate images. the masks are used to define the region of interest and to reduce memory consumption. the naming convention is as follows: 
 
 * img0.nrrd mask0.nrrd 00.pts
 * img1.nrrd mask1.nrrd 10.pts
 
 the .pts format is described here: https://www.creatis.insa-lyon.fr/rio/dir_validation_data
+
+pytorch v1.0.1 was used for development and testing
 
 ### Loss Visualisation
 
