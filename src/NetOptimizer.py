@@ -24,9 +24,9 @@ class NetOptimizer(object):
   def setUserOpts(self, options):
     self.userOpts = options
         
-  def normalizeWeights(self, ccW, sW, cyW):
-    weightSum = ccW + sW + cyW
-    return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
+  def normalizeWeights(self, ccW, sW, cyW, dscWeight):
+    weightSum = ccW + sW + cyW + dscWeight
+    return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum, dscWeight / weightSum]
 
 
   def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx, borderCrossingArry=None):
@@ -150,12 +150,15 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,1,] += tmpField
     zeroIndices[4][:,None,2,] += tmpField 
 
-  def deformImage(self,imgDataToWork, addedField):
+  def deformImage(self,imgDataToWork, addedField, nearestNeighbor = False):
     imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-      deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
+      if nearestNeighbor:
+        deformedTmp = Utils.deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], self.userOpts.device)
+      else:
+        deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
     return imgDataDef
   
@@ -170,38 +173,36 @@ class NetOptimizer(object):
         
     return cycleImgData, outOfBoundsTensor
             
-  def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
+  def optimizeNet(self, imgDataToWork, labelToWork, lastVecField = None, currVecFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
-    defFields = self.net(imgDataToWork)
+    vecFields = self.net(imgDataToWork)
       
-    addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    addedField = lastVecField[:, :, idx[0]:idx[0]+vecFields.shape[2], idx[1]:idx[1]+vecFields.shape[3], idx[2]:idx[2]+vecFields.shape[4]]+ vecFields
       
-    currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = addedField.detach()
+    currVecFields[:, :, idx[0]:idx[0]+vecFields.shape[2], idx[1]:idx[1]+vecFields.shape[3], idx[2]:idx[2]+vecFields.shape[4]] = addedField.detach()
 
-    cropStart0 = int((imgDataToWork.shape[2]-defFields.shape[2])/2)
-    cropStart1 = int((imgDataToWork.shape[3]-defFields.shape[3])/2)
-    cropStart2 = int((imgDataToWork.shape[4]-defFields.shape[4])/2)
-    imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+defFields.shape[2], cropStart1:cropStart1+defFields.shape[3], cropStart2:cropStart2+defFields.shape[4]]
-
-    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currDefFields, self.spacing)
+    cropStart0 = int((imgDataToWork.shape[2]-vecFields.shape[2])/2)
+    cropStart1 = int((imgDataToWork.shape[3]-vecFields.shape[3])/2)
+    cropStart2 = int((imgDataToWork.shape[4]-vecFields.shape[4])/2)
+    imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
+    
+    
+    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currVecFields, self.spacing)
      
     boundaryLoss = 0.0
-    smoothnessLoss = 0.0
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW
     cyclicWeight = self.userOpts.cycleW
-    crossCorrWeight,smoothNessWeight, cyclicWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight)
+    dscWeight = self.userOpts.dscWeight
+    crossCorrWeight,smoothNessWeight, cyclicWeight, dscWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight, dscWeight)
     
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
     
-    if imgDataToWork.shape[1] > 2:
-      smoothnessLoss =lossCalculator.smoothnessVecFieldT(self.userOpts.device)
-    else:
-      smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
+    smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
     
     if self.userOpts.diffeomorphicRegistration:
@@ -215,7 +216,14 @@ class NetOptimizer(object):
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
-    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+    diceLoss = 0.0
+    if labelToWork is not None:
+      labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
+      ## TODO: implement nearest neighbour interpolation!!
+      labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
+      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
+    
+    loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
     if printLoss:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessLoss, deformationField.min(), deformationField.max()))
     torch.cuda.empty_cache()

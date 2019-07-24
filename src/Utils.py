@@ -45,6 +45,22 @@ def getZeroDefField(imagShape, device):
     
   return Context.zeroDefField
 
+#for images
+def getZeroIdxFieldImg(imagShape, device):
+  if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices[0].shape[2:]):
+    zeroIndices = torch.from_numpy( np.indices([imagShape[0],imagShape[1],imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
+    idxs0 = zeroIndices[0].long().to(device)
+    idxs1 = zeroIndices[1].long().to(device)
+    idxs2 = zeroIndices[2].to(device)
+    idxs3 = zeroIndices[3].to(device)
+    idxs4 = zeroIndices[4].to(device)
+    if not useropts.useContext:
+      return [idxs0, idxs1, idxs2, idxs3, idxs4]
+    Context.zeroIndices = [idxs0, idxs1, idxs2, idxs3, idxs4]
+  [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
+  return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
+
+#for deffields
 def getZeroIdxField(imagShape, device):
   if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices[0].shape[2:]):
     zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
@@ -218,6 +234,29 @@ def getPatchSize(imgShape, imgPatchSize):
     patchSize2 = imgShape[4]  
     
   return [patchSize0, patchSize1, patchSize2]
+
+def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
+  zeroIdxField = getZeroIdxFieldImg(imgToDef.shape, device)
+  zeroIdxField[4] += defField[:,None,0,]
+  zeroIdxField[3] += defField[:,None,1,]
+  zeroIdxField[2] += defField[:,None,2,]
+  
+  zeroIdxField[4] = zeroIdxField[4].round().long()
+  zeroIdxField[3] = zeroIdxField[3].round().long()
+  zeroIdxField[2] = zeroIdxField[2].round().long()
+  
+  zeroIdxField[4][zeroIdxField[4] > (defField.shape[4] - 1)] = defField.shape[4] - 1
+  zeroIdxField[4][zeroIdxField[4] < 0] = 0
+    
+  zeroIdxField[3][zeroIdxField[3] > (defField.shape[3] - 1)] = defField.shape[3] - 1
+  zeroIdxField[3][zeroIdxField[3] < 0] = 0
+    
+  zeroIdxField[2][zeroIdxField[2] > (defField.shape[2] - 1)] = defField.shape[2] - 1
+  zeroIdxField[2][zeroIdxField[2] < 0] = 0
+  
+  deformed = imgToDef[zeroIdxField[0], zeroIdxField[1], zeroIdxField[2], zeroIdxField[3], zeroIdxField[4]]
+  return deformed
+  
 
 def deformImage(imgToDef, defFields, device, detach=True):
   zeroDefField = getZeroDefField(imgToDef.shape, device)

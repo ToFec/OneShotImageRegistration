@@ -59,9 +59,11 @@ def main(argv):
     
 
     
-    deformedImage = src.Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
+    
     if isBinary:
-      deformedImage = deformedImage.round().short()
+      deformedImage = src.Utils.deformWithNearestNeighborInterpolation(imageTorch, defFieldTorch, 'cpu')
+    else:
+      deformedImage = src.Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
     deformedImageITK = sitk.GetImageFromArray(torch.tensor(deformedImage[0, 0, ],dtype=imageType))
     
     deformedImageITK.SetSpacing( imageSpacing )

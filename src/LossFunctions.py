@@ -16,19 +16,57 @@ class LossFunctions():
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3))
 
+  #only for 2 labels
   def dice_coeff(self, y_true, y_pred):
-    smooth = 1.
+    smooth = 0.000001
     # Flatten
     y_true_f = torch.reshape(y_true, (-1,))
     y_pred_f = torch.reshape(y_pred, (-1,))
     intersection = torch.sum(y_true_f * y_pred_f)
-    score = (2. * intersection + smooth) / (torch.sum(y_true_f) + torch.sum(y_pred_f) + smooth)
+    score = 2. * intersection / (torch.sum(y_true_f) + torch.sum(y_pred_f) + smooth)
     return score
 
 
   def dice_loss(self, y_true, y_pred):
       loss = 1 - self.dice_coeff(y_true, y_pred)
       return loss
+  
+  
+  
+#Generalised dice overlap as a deep learning loss function for highly unbalanced segmentations  
+  def multiLabelDiceLoss(self, y_true, y_pred, multiScale = False):
+    smooth = 0.000001
+    uniqueVals = torch.unique(y_true, sorted=True)
+    
+    denominator = 0.0
+    numerator = 0.0
+    for label in uniqueVals[1:]:
+      trueSmooth = y_true==label
+      predSmooth = y_pred==label  
+      intersection = torch.sum(trueSmooth * predSmooth)
+      labelSum = torch.sum(trueSmooth) + torch.sum(predSmooth)
+      denominator = denominator + labelSum
+      numerator = numerator + intersection
+      
+    dice = 2. * numerator / (denominator + smooth)
+    loss =  1 - dice
+    if multiScale:
+      for gaussKernel in self.gaussSmothingKernels:
+        denominator = 0.0
+        numerator = 0.0
+        for label in uniqueVals[1:]:
+          trueSmooth = gaussKernel(y_true==label)
+          predSmooth = gaussKernel(y_pred==label)          
+          intersection = torch.sum(trueSmooth * predSmooth)
+          labelSum = torch.sum(trueSmooth) + torch.sum(predSmooth)
+          denominator = denominator + labelSum
+          numerator = numerator + intersection
+        dice = 2. * numerator / (denominator + smooth)
+        loss = loss + (1 - dice)
+      return loss / (len(self.gaussSmothingKernels) + 1.0)
+    else:
+      return loss
+  
     
 #     Weakly-supervised convolutional neural networks for multimodal image registration
   def multiScaleDiceLoss(self, y_true, y_pred):
@@ -201,7 +239,7 @@ class LossFunctions():
       loss3 = self.getSmoothnessForDir3(imgIdx, device)
       
 #       loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
-      loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
+      loss[imgIdx] = torch.sum(torch.pow(loss1 + loss2 + loss3,2)) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
      
     return loss.sum() / self.defFields.shape[0]
   

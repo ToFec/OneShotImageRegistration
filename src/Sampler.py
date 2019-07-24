@@ -46,7 +46,7 @@ class Sampler(object):
   
   def getSubSample(self, idx, normImgPatch):
       imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
-      labelData = torch.empty((1, self.imgData.shape[1], idx[3], idx[4], idx[5]), requires_grad=False)
+      labelData = None
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
       if (self.labelData.dim() == self.imgData.dim()):

@@ -3,7 +3,7 @@ import torch
 import Utils
 
 class ScalingAndSquaring(nn.Module):
-  def __init__(self ,num_steps=4):
+  def __init__(self ,num_steps=5):
       super(ScalingAndSquaring, self).__init__()
       self.num_steps = num_steps
       
