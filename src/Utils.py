@@ -258,7 +258,7 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   return deformed
   
 
-def deformImage(imgToDef, defFields, device, detach=True):
+def deformImage(imgToDef, defFields, device, detach=True, NN=False):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
   if (detach):
@@ -270,7 +270,10 @@ def deformImage(imgToDef, defFields, device, detach=True):
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
-  deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+  if NN:
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode='border')
+  else:
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
   return deformedTmp
 
 def getReceptiveFieldOffset(nuOfLayers):
@@ -325,9 +328,7 @@ def sampleImgData(data, samplingRate):
       else:
         maskData = maskDataOrig
       if (labelDataOrig.dim() == imgDataOrig.dim()):
-        labelDataOrig = labelDataOrig.float()
         labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
-        labelData = labelData.byte()
       else:
         labelData = labelDataOrig
     else:

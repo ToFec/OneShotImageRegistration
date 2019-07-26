@@ -42,8 +42,13 @@ class LossFunctions():
     denominator = 0.0
     numerator = 0.0
     for label in uniqueVals[1:]:
-      trueSmooth = y_true==label
-      predSmooth = y_pred==label  
+      trueSmooth = torch.zeros_like(y_true)
+      trueSmooth[y_true == label ] = 1.0
+      
+      predSmooth = torch.zeros_like(y_pred)
+      predSmooth[y_pred == label] = y_pred[y_pred == label]
+      predSmooth[predSmooth > 0] = 1.0
+
       intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
       labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth, dtype=torch.float32)
       denominator = denominator + labelSum
@@ -65,7 +70,10 @@ class LossFunctions():
             else:
               self.diceKernelMapping[gaussKernel] = {label: trueSmooth}
               
-          predSmooth = gaussKernel(y_pred==label)          
+          predSmooth = torch.zeros_like(y_pred)
+          predSmooth[y_pred == label] = y_pred[y_pred == label]
+          predSmooth[predSmooth > 0] = 1.0              
+          predSmooth = gaussKernel(predSmooth)          
           intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
           labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth,dtype=torch.float32)
           denominator = denominator + labelSum

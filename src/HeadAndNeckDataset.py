@@ -136,7 +136,7 @@ class HeadAndNeckDataset(Dataset):
           tmp = sitk.ReadImage(str(labelsFileName))
           labelsNii = sitk.GetArrayFromImage(tmp)
           labelData.append(labelsNii)
-        labelData = np.stack(labelData)
+        labelData = np.stack(labelData).astype('float32')
       
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):

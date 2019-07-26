@@ -83,10 +83,7 @@ class NetOptimizer(object):
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-      if nearestNeighbor:
-        deformedTmp = Utils.deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], self.userOpts.device)
-      else:
-        deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False)
+      deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False, nearestNeighbor)
       imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
     return imgDataDef
   
@@ -162,9 +159,8 @@ class NetOptimizer(object):
     diceLoss = 0.0
     if labelToWork is not None:
       labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
-      ## TODO: implement nearest neighbour interpolation!!
-#       labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
-      diceLoss = 0.0#lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
+      labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
+      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
     
     loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
 #     loss = dscWeight * diceLoss
