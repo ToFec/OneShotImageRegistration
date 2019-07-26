@@ -23,7 +23,7 @@ the input folders can also contain segmentations and/or masks. landmarks will be
 
 the .pts format is described here: https://www.creatis.insa-lyon.fr/rio/dir_validation_data
 
-pytorch v1.0.1 was used for development and testing
+pytorch v0.4.1 was used for development and testing
 
 ### Loss Visualisation
 
