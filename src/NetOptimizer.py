@@ -4,6 +4,7 @@ import LossFunctions as lf
 import numpy as np
 import Utils
 import ScalingAndSquaring as sas
+from scipy._lib import _tmpdirs
 
 class NetOptimizer(object):
 
@@ -13,10 +14,6 @@ class NetOptimizer(object):
     self.net = net
     self.userOpts = options
     self.scalingSquaring = sas.ScalingAndSquaring()
-    if self.userOpts.ccCalcNN:
-      self.cycleLossCalculationMethod = self.cycleLossCalculationsNearestNeighbor
-    else:
-      self.cycleLossCalculationMethod = self.cycleLossCalculations
 
   def setOptimizer(self, optimizer):
     self.optimizer = optimizer
@@ -29,7 +26,7 @@ class NetOptimizer(object):
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum, dscWeight / weightSum]
 
 
-  def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx, borderCrossingArry=None):
+  def cycleLossCalculationsNearestNeighbor(self, zeroIndices, defFields, currDefFields, idx, borderCrossingArry=None):
     fieldsIdxs4 = zeroIndices[4].round().long()
     fieldsIdxs3 = zeroIndices[3].round().long()
     fieldsIdxs2 = zeroIndices[2].round().long()
@@ -58,100 +55,31 @@ class NetOptimizer(object):
     fields0 = zeroIndices[0]
     fields1 = zeroIndices[1]
     
-    cycleImgData[:,chanRange, ] = currentAndActualField[fields0,fields1,fieldsIdxs2, fieldsIdxs3, fieldsIdxs4]
+    cycleImgData = currentAndActualField[fields0,fields1,fieldsIdxs2, fieldsIdxs3, fieldsIdxs4]
     
-    zeroIndices[1] += 3
+    zeroIndices[1] = zeroIndices[1] + 3
     
     ##take care of def vec order !!!
-    tmpField = cycleImgData[:,None,chanRange[2],].detach()
+    tmpField = cycleImgData[:,None,2,].detach()
     zeroIndices[2][:,None,0,] += tmpField
     zeroIndices[2][:,None,1,] += tmpField
     zeroIndices[2][:,None,2,] += tmpField
-    
-    tmpField = cycleImgData[:,None,chanRange[1],].detach()
+     
+    tmpField = cycleImgData[:,None,1,].detach()
     zeroIndices[3][:,None,0,] += tmpField
     zeroIndices[3][:,None,1,] += tmpField
     zeroIndices[3][:,None,2,] += tmpField
-    
-    tmpField = cycleImgData[:,None,chanRange[0],].detach()
+     
+    tmpField = cycleImgData[:,None,0,].detach()
     zeroIndices[4][:,None,0,] += tmpField
     zeroIndices[4][:,None,1,] += tmpField
-    zeroIndices[4][:,None,2,] += tmpField 
+    zeroIndices[4][:,None,2,] += tmpField
+    
+    return cycleImgData
 
-#
-###deprecated
-#
-  def cycleLossCalculations(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx):
-    
-    fieldsLow4 = zeroIndices[4].trunc()
-    partHigh4 = zeroIndices[4] - fieldsLow4
-    fieldsLow3 = zeroIndices[3].trunc()
-    partHigh3 = zeroIndices[3] - fieldsLow3
-    fieldsLow2 = zeroIndices[2].trunc()
-    partHigh2 = zeroIndices[2] - fieldsLow2
-        
-    if currDefFields is not None:
-      currentAndActualField = currDefFields.clone()
-      currentAndActualField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = defFields
-      fieldsLow4 += idx[2]
-      fieldsLow3 += idx[1]
-      fieldsLow2 += idx[0]
-    else:
-      currentAndActualField = defFields
-    
-    partLow4 = 1.0 - partHigh4
-    fieldsLow4 = fieldsLow4.long()
-    fieldsLow4[fieldsLow4 < 0] = 0 
-    fieldsHigh4 = fieldsLow4 + 1
-    fieldsHigh4[fieldsHigh4 > (currentAndActualField.shape[4] - 1)] = currentAndActualField.shape[4] - 1
-    fieldsLow4[fieldsLow4 > (currentAndActualField.shape[4] - 1)] = currentAndActualField.shape[4] - 1
-         
-    partLow3 = 1.0 - partHigh3
-    fieldsLow3 = fieldsLow3.long()
-    fieldsLow3[fieldsLow3 < 0] = 0
-    fieldsHigh3 = fieldsLow3 + 1
-    fieldsHigh3[fieldsHigh3 > (currentAndActualField.shape[3] - 1)] = currentAndActualField.shape[3] - 1
-    fieldsLow3[fieldsLow3 > (currentAndActualField.shape[3] - 1)] = currentAndActualField.shape[3] - 1  
-    
-    partLow2 = 1.0 - partHigh2
-    fieldsLow2 = fieldsLow2.long()
-    fieldsLow2[fieldsLow2 < 0] = 0
-    fieldsHigh2 = fieldsLow2 + 1
-    fieldsHigh2[fieldsHigh2 > (currentAndActualField.shape[2] - 1)] = currentAndActualField.shape[2] - 1
-    fieldsLow2[fieldsLow2 > (currentAndActualField.shape[2] - 1)] = currentAndActualField.shape[2] - 1  
-    
-    fields0 = zeroIndices[0]
-    fields1 = zeroIndices[1]
-    
-    cycleImgData[:,chanRange, ] = partLow2 * partLow3 * partLow4 * currentAndActualField[fields0,fields1,fieldsLow2, fieldsLow3, fieldsLow4] + \
-    partLow2 * partLow3 * partHigh4 * currentAndActualField[fields0,fields1,fieldsLow2, fieldsLow3, fieldsHigh4] + \
-    partLow2 * partHigh3 * partLow4 * currentAndActualField[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsLow4] + \
-    partHigh2 * partLow3 * partLow4 * currentAndActualField[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsLow4] + \
-    partHigh2 * partHigh3 * partLow4 * currentAndActualField[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsLow4] + \
-    partHigh2 * partLow3 * partHigh4 * currentAndActualField[fields0,fields1,fieldsHigh2, fieldsLow3, fieldsHigh4] + \
-    partLow2 * partHigh3 * partHigh4 * currentAndActualField[fields0,fields1,fieldsLow2, fieldsHigh3, fieldsHigh4] + \
-    partHigh2 * partHigh3 * partHigh4 * currentAndActualField[fields0,fields1,fieldsHigh2, fieldsHigh3, fieldsHigh4]
-    
-    zeroIndices[1] += 3
-    
-    ##take care of def vec order !!!
-    tmpField = cycleImgData[:,None,chanRange[2],].detach()
-    zeroIndices[2][:,None,0,] += tmpField
-    zeroIndices[2][:,None,1,] += tmpField
-    zeroIndices[2][:,None,2,] += tmpField
-    
-    tmpField = cycleImgData[:,None,chanRange[1],].detach()
-    zeroIndices[3][:,None,0,] += tmpField
-    zeroIndices[3][:,None,1,] += tmpField
-    zeroIndices[3][:,None,2,] += tmpField
-    
-    tmpField = cycleImgData[:,None,chanRange[0],].detach()
-    zeroIndices[4][:,None,0,] += tmpField
-    zeroIndices[4][:,None,1,] += tmpField
-    zeroIndices[4][:,None,2,] += tmpField 
 
   def deformImage(self,imgDataToWork, addedField, nearestNeighbor = False):
-    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
+    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device, imgDataToWork.dtype)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
@@ -169,10 +97,25 @@ class NetOptimizer(object):
     if self.userOpts.cycleW > 0.0:
       for chanIdx in range((addedField.shape[1] /3 ) - 1, -1, -1):
         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
-        self.cycleLossCalculationMethod(zeroIndices, cycleImgData, addedField, chanRange, None, None, outOfBoundsTensor)
+        cycleImgData[:,chanRange, ] = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
+#         tmp = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
+#         cycleImageDataList[chanIdx] = tmp
         
     return cycleImgData, outOfBoundsTensor
-            
+  
+  def getCycleImageDataNew(self, addedField):
+    zeroIndices = Utils.getZeroIdxField(addedField.shape, self.userOpts.device)
+    outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.uint8, device=self.userOpts.device)
+    cycleImageDataList = [None]*(addedField.shape[1] /3)
+    if self.userOpts.cycleW > 0.0:
+      for chanIdx in range((addedField.shape[1] /3 ) - 1, -1, -1):
+#         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
+#         cycleImgData[:,chanRange, ] = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
+        tmp = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
+        cycleImageDataList[chanIdx] = tmp
+        
+    return torch.cat(cycleImageDataList, dim=1), outOfBoundsTensor  
+  
   def optimizeNet(self, imgDataToWork, labelToWork, lastVecField = None, currVecFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
@@ -220,12 +163,13 @@ class NetOptimizer(object):
     if labelToWork is not None:
       labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
       ## TODO: implement nearest neighbour interpolation!!
-      labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
-      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
+#       labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
+      diceLoss = 0.0#lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
     
     loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+#     loss = dscWeight * diceLoss
     if printLoss:
-      print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessLoss, deformationField.min(), deformationField.max()))
+      print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessDF, cycleLoss, diceLoss))
     torch.cuda.empty_cache()
           
     loss.backward()

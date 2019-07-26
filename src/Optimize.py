@@ -63,13 +63,13 @@ class Optimize():
           
           deformedLabelTmp = deformImage(labelToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
           deformedLabelTmp = deformedLabelTmp.round().short()
-          labelDataDef = sitk.GetImageFromArray(deformedLabelTmp[0, 0, ])
-          labelDataOrig = sitk.GetImageFromArray(labelToDef[0, 0, ])
+          labelDataDef = sitk.GetImageFromArray(deformedLabelTmp[0, 0, ].cpu())
+          labelDataOrig = sitk.GetImageFromArray(labelToDef[0, 0, ].cpu())
           dataloader.dataset.saveData(labelDataDef, self.userOpts.outputPath, 'deformedLabelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
           dataloader.dataset.saveData(labelDataOrig, self.userOpts.outputPath, 'origLabelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         
-        imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ])
-        imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
+        imgDataDef = sitk.GetImageFromArray(deformedTmp[0, 0, ].cpu())
+        imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ].cpu())
         
         dataloader.dataset.saveData(imgDataDef, self.userOpts.outputPath, 'deformedImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'origImgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
@@ -79,7 +79,7 @@ class Optimize():
         defX = defFields[imgIdx, chanIdx * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
         defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
         defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
-        defField = getDefField(defX, defY, defZ)
+        defField = getDefField(defX.cpu(), defY.cpu(), defZ.cpu())
         defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
         dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, 'deformationFieldDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         

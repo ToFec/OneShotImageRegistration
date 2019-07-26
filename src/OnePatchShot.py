@@ -54,6 +54,8 @@ def main(argv):
   np.random.seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
+  if userOpts.debugMode:
+    torch.autograd.set_detect_anomaly(True)
 
   if not os.path.isdir(userOpts.outputPath):
     os.makedirs(userOpts.outputPath)

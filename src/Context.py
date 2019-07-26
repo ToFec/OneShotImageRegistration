@@ -1,6 +1,7 @@
 zeroDefField=None
 zeroIndices=None
-imgDataDef=None
+zeroIndicesImg=None
+imgDataDef={}
 imgDataDef2=None
 cycleImgData=None
 

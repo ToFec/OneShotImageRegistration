@@ -15,6 +15,7 @@ class LossFunctions():
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3))
+    self.diceKernelMapping = {}
 
   #only for 2 labels
   def dice_coeff(self, y_true, y_pred):
@@ -43,8 +44,8 @@ class LossFunctions():
     for label in uniqueVals[1:]:
       trueSmooth = y_true==label
       predSmooth = y_pred==label  
-      intersection = torch.sum(trueSmooth * predSmooth)
-      labelSum = torch.sum(trueSmooth) + torch.sum(predSmooth)
+      intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
+      labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth, dtype=torch.float32)
       denominator = denominator + labelSum
       numerator = numerator + intersection
       
@@ -55,10 +56,18 @@ class LossFunctions():
         denominator = 0.0
         numerator = 0.0
         for label in uniqueVals[1:]:
-          trueSmooth = gaussKernel(y_true==label)
+          if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(label):
+            trueSmooth = self.diceKernelMapping[gaussKernel][label]
+          else:
+            trueSmooth = gaussKernel(y_true==label)
+            if self.diceKernelMapping.has_key(gaussKernel):
+              self.diceKernelMapping[gaussKernel][label] = trueSmooth
+            else:
+              self.diceKernelMapping[gaussKernel] = {label: trueSmooth}
+              
           predSmooth = gaussKernel(y_pred==label)          
-          intersection = torch.sum(trueSmooth * predSmooth)
-          labelSum = torch.sum(trueSmooth) + torch.sum(predSmooth)
+          intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
+          labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth,dtype=torch.float32)
           denominator = denominator + labelSum
           numerator = numerator + intersection
         dice = 2. * numerator / (denominator + smooth)
@@ -72,7 +81,11 @@ class LossFunctions():
   def multiScaleDiceLoss(self, y_true, y_pred):
     currDscLoss = self.dice_loss(y_true, y_pred)
     for gaussKernel in self.gaussSmothingKernels:
-      trueSmooth = gaussKernel(y_true)
+      if self.diceKernelMapping.has_key(gaussKernel):
+        trueSmooth = self.diceKernelMapping[gaussKernel]
+      else:
+        trueSmooth = gaussKernel(y_true)
+        self.diceKernelMapping[gaussKernel] = trueSmooth
       predSmooth = gaussKernel(y_pred)
       currDscLoss = currDscLoss + self.dice_loss(trueSmooth, predSmooth)
       

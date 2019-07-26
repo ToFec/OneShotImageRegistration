@@ -47,7 +47,7 @@ def getZeroDefField(imagShape, device):
 
 #for images
 def getZeroIdxFieldImg(imagShape, device):
-  if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices[0].shape[2:]):
+  if (Context.zeroIndicesImg is None) or (imagShape[2:] != Context.zeroIndicesImg[0].shape[2:]):
     zeroIndices = torch.from_numpy( np.indices([imagShape[0],imagShape[1],imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
     idxs0 = zeroIndices[0].long().to(device)
     idxs1 = zeroIndices[1].long().to(device)
@@ -56,8 +56,8 @@ def getZeroIdxFieldImg(imagShape, device):
     idxs4 = zeroIndices[4].to(device)
     if not useropts.useContext:
       return [idxs0, idxs1, idxs2, idxs3, idxs4]
-    Context.zeroIndices = [idxs0, idxs1, idxs2, idxs3, idxs4]
-  [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
+    Context.zeroIndicesImg = [idxs0, idxs1, idxs2, idxs3, idxs4]
+  [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndicesImg
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
 #for deffields
@@ -76,16 +76,16 @@ def getZeroIdxField(imagShape, device):
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
-def getImgDataDef(imagShape, device):
+def getImgDataDef(imagShape, device, dataType=torch.float32):
   if useropts.useContext:
-    if (Context.imgDataDef is None) or (imagShape != Context.imgDataDef.shape):
-      imgDataDef = torch.empty(imagShape, device=device, requires_grad=False)
-      Context.imgDataDef = imgDataDef
+    if (not Context.imgDataDef.has_key(dataType)) or (imagShape != Context.imgDataDef[dataType].shape):
+      imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
+      Context.imgDataDef[dataType] = imgDataDef
     else:
-      Context.imgDataDef.detach_()
-    return Context.imgDataDef
+      Context.imgDataDef[dataType].detach_()
+    return Context.imgDataDef[dataType]
   else:
-    return torch.empty(imagShape, device=device, requires_grad=False)
+    return torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
 
 def getImgDataDef2(imagShape, device):
   if useropts.useContext:

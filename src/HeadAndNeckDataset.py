@@ -170,7 +170,7 @@ class HeadAndNeckDataset(Dataset):
         imgData = imgData / imgStd
         self.meansAndStds[idx] = (imgMean, imgStd)
       
-      if (len(labelsFileNames) == len(maskFileNames)):
+      if (len(labelsFileNames) > 0) and (len(labelsFileNames) == len(maskFileNames)):
           labelData[maskData == 0] = 0
       
       imgData, maskData, labelData = self.getRightSizedData(imgData, maskData, labelData, idx)
