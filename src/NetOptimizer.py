@@ -92,7 +92,7 @@ class NetOptimizer(object):
     zeroIndices = Utils.getZeroIdxField(addedField.shape, self.userOpts.device)
     outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.uint8, device=self.userOpts.device)
     if self.userOpts.cycleW > 0.0:
-      for chanIdx in range((addedField.shape[1] /3 ) - 1, -1, -1):
+      for chanIdx in range(int(addedField.shape[1] /3.0 ) - 1, -1, -1):
         chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
         cycleImgData[:,chanRange, ] = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
 #         tmp = self.cycleLossCalculationsNearestNeighbor(zeroIndices, addedField, None, None, outOfBoundsTensor)
