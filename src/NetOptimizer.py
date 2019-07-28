@@ -78,8 +78,8 @@ class NetOptimizer(object):
     return cycleImgData
 
 
-  def deformImage(self,imgDataToWork, addedField, nearestNeighbor = False):
-    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device, imgDataToWork.dtype)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
+  def deformImage(self,imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0):
+    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device, imgDataToWork.dtype, imgIdx)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
     for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
       imgToDef = imgDataToWork[:, None, chanIdx, ]
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
@@ -144,7 +144,7 @@ class NetOptimizer(object):
     
     smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
-    
+
     if self.userOpts.diffeomorphicRegistration:
       deformationField = self.scalingSquaring(addedField)
     else:
@@ -159,12 +159,15 @@ class NetOptimizer(object):
     diceLoss = 0.0
     if labelToWork is not None:
       labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
-      labelToWorkDef = self.deformImage(labelToWork, deformationField, True)
+      deformationField.register_hook(Utils.save_grad('deformationField'))
+      labelToWorkDef = self.deformImage(labelToWork, deformationField, False, 1)
+      labelToWorkDef.register_hook(Utils.save_grad('labelToWorkDef'))
       diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
-    
-    loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
-#     loss = dscWeight * diceLoss
-    if printLoss:
+
+    #loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+    loss = dscWeight * diceLoss
+    #if printLoss:
+    if True:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessDF, cycleLoss, diceLoss))
     torch.cuda.empty_cache()
           

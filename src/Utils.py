@@ -76,14 +76,14 @@ def getZeroIdxField(imagShape, device):
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
-def getImgDataDef(imagShape, device, dataType=torch.float32):
+def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
   if useropts.useContext:
-    if (dataType not in Context.imgDataDef) or (imagShape != Context.imgDataDef[dataType].shape):
+    if (dataType not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape):
       imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
-      Context.imgDataDef[dataType] = imgDataDef
+      Context.imgDataDef[imgIdx] = imgDataDef
     else:
-      Context.imgDataDef[dataType].detach_()
-    return Context.imgDataDef[dataType]
+      Context.imgDataDef[imgIdx].detach_()
+    return Context.imgDataDef[imgIdx]
   else:
     return torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
 
@@ -270,10 +270,12 @@ def deformImage(imgToDef, defFields, device, detach=True, NN=False):
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
+  currDefField.register_hook(save_grad('currDefField'))
   if NN:
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode='border')
   else:
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+  deformedTmp.register_hook(save_grad('deformedTmp'))
   return deformedTmp
 
 def getReceptiveFieldOffset(nuOfLayers):

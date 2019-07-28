@@ -41,20 +41,24 @@ class LossFunctions():
     
     denominator = 0.0
     numerator = 0.0
-    for label in uniqueVals[1:]:
-      trueSmooth = torch.zeros_like(y_true)
-      trueSmooth[y_true == label ] = 1.0
-      
-      predSmooth = torch.zeros_like(y_pred)
-      predSmooth[y_pred == label] = y_pred[y_pred == label]
-      predSmooth[predSmooth > 0] = 1.0
 
-      intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
-      labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth, dtype=torch.float32)
+    for label in uniqueVals[1:]:
+      trueSmooth = torch.zeros_like(y_true) - 1.0
+      trueSmooth[y_true == label ] = label
+      
+#       predSmooth = torch.zeros_like(y_pred)
+#       predSmooth[y_pred == label] = y_pred[y_pred == label]
+#       predSmooth[predSmooth > 0] = 1.0
+
+      intersection = torch.sum(y_pred[y_pred == trueSmooth], dtype=torch.float32) / label
+      
+#       intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
+      labelSum = (torch.sum(y_pred[y_pred == label], dtype=torch.float32) + torch.sum(y_true[y_true == label], dtype=torch.float32)) / label
       denominator = denominator + labelSum
       numerator = numerator + intersection
       
     dice = 2. * numerator / (denominator + smooth)
+
     loss =  1 - dice
     if multiScale:
       for gaussKernel in self.gaussSmothingKernels:
@@ -64,18 +68,16 @@ class LossFunctions():
           if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(label):
             trueSmooth = self.diceKernelMapping[gaussKernel][label]
           else:
-            trueSmooth = gaussKernel(y_true==label)
+            trueSmooth = gaussKernel(y_true * (y_true==label).to(torch.float32))
             if self.diceKernelMapping.has_key(gaussKernel):
               self.diceKernelMapping[gaussKernel][label] = trueSmooth
             else:
               self.diceKernelMapping[gaussKernel] = {label: trueSmooth}
               
-          predSmooth = torch.zeros_like(y_pred)
-          predSmooth[y_pred == label] = y_pred[y_pred == label]
-          predSmooth[predSmooth > 0] = 1.0              
+          predSmooth = y_pred * (y_pred == label).to(torch.float32)
           predSmooth = gaussKernel(predSmooth)          
-          intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
-          labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth,dtype=torch.float32)
+          intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32) / label
+          labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth,dtype=torch.float32) / label
           denominator = denominator + labelSum
           numerator = numerator + intersection
         dice = 2. * numerator / (denominator + smooth)
