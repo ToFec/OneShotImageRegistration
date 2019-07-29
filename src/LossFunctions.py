@@ -12,9 +12,9 @@ class LossFunctions():
     self.dimWeight = spacing
     
     self.gaussSmothingKernels = []
-    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3))
-    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3))
-    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3,imgDataToWork.device))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3,imgDataToWork.device))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
     self.diceKernelMapping = {}
 
   #only for 2 labels
@@ -35,25 +35,21 @@ class LossFunctions():
   
   
 #Generalised dice overlap as a deep learning loss function for highly unbalanced segmentations  
-  def multiLabelDiceLoss(self, y_true, y_pred, multiScale = False):
-    smooth = 0.000001
+  def multiLabelDiceLoss(self, y_true, deformationField, multiScale = False):
+    smooth = 0.0000000001
     uniqueVals = torch.unique(y_true, sorted=True)
     
     denominator = 0.0
     numerator = 0.0
 
     for label in uniqueVals[1:]:
-      trueSmooth = torch.zeros_like(y_true) - 1.0
-      trueSmooth[y_true == label ] = label
-      
-#       predSmooth = torch.zeros_like(y_pred)
-#       predSmooth[y_pred == label] = y_pred[y_pred == label]
-#       predSmooth[predSmooth > 0] = 1.0
+      trueLabelVol = torch.zeros_like(y_true)
+      trueLabelVol[y_true == label ] = 1.0
+      defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1)
 
-      intersection = torch.sum(y_pred[y_pred == trueSmooth], dtype=torch.float32) / label
+      intersection = torch.sum(trueLabelVol * defLabelVol, dtype=torch.float32)
       
-#       intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32)
-      labelSum = (torch.sum(y_pred[y_pred == label], dtype=torch.float32) + torch.sum(y_true[y_true == label], dtype=torch.float32)) / label
+      labelSum = (torch.sum(defLabelVol, dtype=torch.float32) + torch.sum(trueLabelVol, dtype=torch.float32))
       denominator = denominator + labelSum
       numerator = numerator + intersection
       
@@ -66,18 +62,21 @@ class LossFunctions():
         numerator = 0.0
         for label in uniqueVals[1:]:
           if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(label):
-            trueSmooth = self.diceKernelMapping[gaussKernel][label]
+            trueLabelVol = self.diceKernelMapping[gaussKernel][label]
           else:
-            trueSmooth = gaussKernel(y_true * (y_true==label).to(torch.float32))
+            trueLabelVol = torch.zeros_like(y_true)
+            trueLabelVol[y_true == label ] = 1.0
+            trueLabelVol = gaussKernel(trueLabelVol)
             if self.diceKernelMapping.has_key(gaussKernel):
-              self.diceKernelMapping[gaussKernel][label] = trueSmooth
+              self.diceKernelMapping[gaussKernel][label] = trueLabelVol
             else:
-              self.diceKernelMapping[gaussKernel] = {label: trueSmooth}
-              
-          predSmooth = y_pred * (y_pred == label).to(torch.float32)
-          predSmooth = gaussKernel(predSmooth)          
-          intersection = torch.sum(trueSmooth * predSmooth, dtype=torch.float32) / label
-          labelSum = torch.sum(trueSmooth, dtype=torch.float32) + torch.sum(predSmooth,dtype=torch.float32) / label
+              self.diceKernelMapping[gaussKernel] = {label: trueLabelVol}
+          
+          defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
+                                                                              int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
+                                                                              int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1)    
+          intersection = torch.sum(trueLabelVol * defLabelVol, dtype=torch.float32)
+          labelSum = (torch.sum(defLabelVol, dtype=torch.float32) + torch.sum(trueLabelVol, dtype=torch.float32))
           denominator = denominator + labelSum
           numerator = numerator + intersection
         dice = 2. * numerator / (denominator + smooth)

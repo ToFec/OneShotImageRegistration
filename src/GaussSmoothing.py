@@ -17,7 +17,7 @@ class GaussianSmoothing(nn.Module):
         dim (int, optional): The number of dimensions of the data.
             Default value is 2 (spatial).
     """
-    def __init__(self, channels, kernel_size, sigma, dim=2):
+    def __init__(self, channels, kernel_size, sigma, dim, device):
         super(GaussianSmoothing, self).__init__()
         if isinstance(kernel_size, numbers.Number):
             kernel_size = [kernel_size] * dim
@@ -44,7 +44,7 @@ class GaussianSmoothing(nn.Module):
         # Reshape to depthwise convolutional weight
         kernel = kernel.view(1, 1, *kernel.size())
         kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
-        
+        kernel = kernel.to(device)
         self.register_buffer('weight', kernel)
         self.groups = channels
 

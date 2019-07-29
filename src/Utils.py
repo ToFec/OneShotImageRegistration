@@ -258,6 +258,18 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   return deformed
   
 
+def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0):
+  imgDataDef = getImgDataDef(imgDataToWork.shape, imgDataToWork.device, imgDataToWork.dtype, imgIdx)
+  for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
+    imgToDef = imgDataToWork[:, None, chanIdx, ]
+    chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+    if nearestNeighbor:
+      deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], imgDataToWork.device)        
+    else:
+      deformedTmp = deformImage(imgToDef, addedField[: , chanRange, ], imgDataToWork.device, False, nearestNeighbor)
+    imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
+  return imgDataDef
+
 def deformImage(imgToDef, defFields, device, detach=True, NN=False):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
@@ -270,12 +282,10 @@ def deformImage(imgToDef, defFields, device, detach=True, NN=False):
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
-  currDefField.register_hook(save_grad('currDefField'))
   if NN:
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode='border')
   else:
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
-  deformedTmp.register_hook(save_grad('deformedTmp'))
   return deformedTmp
 
 def getReceptiveFieldOffset(nuOfLayers):
@@ -362,5 +372,7 @@ def save_grad(name):
   
   def hook(grad):
       print(name, np.float64(torch.sum(grad)))
+      print(name, np.float64(torch.min(grad)))
+      print(name, np.float64(torch.max(grad)))
 
   return hook

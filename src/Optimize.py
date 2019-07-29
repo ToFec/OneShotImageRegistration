@@ -61,8 +61,7 @@ class Optimize():
           labelToDef = labelData[None, None, imgIdx, chanIdx, ].float()
           labelToDef = labelToDef.to(self.userOpts.device)
           
-          deformedLabelTmp = deformImage(labelToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device)
-          deformedLabelTmp = deformedLabelTmp.round().short()
+          deformedLabelTmp = deformImage(labelToDef, defFields[None, imgIdx, chanRange, ], self.userOpts.device, NN=True)
           labelDataDef = sitk.GetImageFromArray(deformedLabelTmp[0, 0, ].cpu())
           labelDataOrig = sitk.GetImageFromArray(labelToDef[0, 0, ].cpu())
           dataloader.dataset.saveData(labelDataDef, self.userOpts.outputPath, 'deformedLabelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)

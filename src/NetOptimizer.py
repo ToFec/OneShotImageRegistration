@@ -78,15 +78,6 @@ class NetOptimizer(object):
     return cycleImgData
 
 
-  def deformImage(self,imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0):
-    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device, imgDataToWork.dtype, imgIdx)#torch.empty(imgDataToWork.shape, device=self.userOpts.device, requires_grad=False)#
-    for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
-      imgToDef = imgDataToWork[:, None, chanIdx, ]
-      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
-      deformedTmp = Utils.deformImage(imgToDef, addedField[: , chanRange, ], self.userOpts.device, False, nearestNeighbor)
-      imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
-    return imgDataDef
-  
   def getCycleImageData(self, addedField):
     cycleImgData = Utils.getCycleImgData(addedField.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
     zeroIndices = Utils.getZeroIdxField(addedField.shape, self.userOpts.device)
@@ -129,7 +120,7 @@ class NetOptimizer(object):
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
     
-    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currVecFields, self.spacing)
+    lossCalculator = lf.LossFunctions(labelToWork, addedField, currVecFields, self.spacing)
      
     boundaryLoss = 0.0
     
@@ -150,24 +141,19 @@ class NetOptimizer(object):
     else:
       deformationField = addedField
     
-    imgDataDef = self.deformImage(imgDataToWork, deformationField)
+    imgDataDef = Utils.deformWholeImage(imgDataToWork, deformationField)
     cycleImgData, outOfBoundsTensor = self.getCycleImageData(deformationField)
    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
     diceLoss = 0.0
-    if labelToWork is not None:
+    if labelToWork is not None and dscWeight > 0.0:
       labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
-      deformationField.register_hook(Utils.save_grad('deformationField'))
-      labelToWorkDef = self.deformImage(labelToWork, deformationField, False, 1)
-      labelToWorkDef.register_hook(Utils.save_grad('labelToWorkDef'))
-      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, labelToWorkDef, False)
+      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, deformationField, False)
 
-    #loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
-    loss = dscWeight * diceLoss
-    #if printLoss:
-    if True:
+    loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+    if printLoss:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessDF, cycleLoss, diceLoss))
     torch.cuda.empty_cache()
           
