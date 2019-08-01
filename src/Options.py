@@ -1,6 +1,6 @@
 import torch
 useContext = True
-debugMode=True
+debugMode=False
 numberOfEpochs = 1000
 usePaddedNet=True
 
@@ -28,7 +28,3 @@ else:
   smoothW = (0.0001,0.0001,0.0001)
 lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
-
-
-
-

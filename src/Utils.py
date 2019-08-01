@@ -78,7 +78,7 @@ def getZeroIdxField(imagShape, device):
 
 def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
   if useropts.useContext:
-    if (dataType not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape):
+    if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape):
       imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
       Context.imgDataDef[imgIdx] = imgDataDef
     else:
@@ -270,7 +270,7 @@ def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=
     imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
   return imgDataDef
 
-def deformImage(imgToDef, defFields, device, detach=True, NN=False):
+def deformImage(imgToDef, defFields, device, detach=True, NN=False, padMode='border'):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
   if (detach):
@@ -283,9 +283,9 @@ def deformImage(imgToDef, defFields, device, detach=True, NN=False):
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
   if NN:
-    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode='border')
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode=padMode)
   else:
-    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode=padMode)
   return deformedTmp
 
 def getReceptiveFieldOffset(nuOfLayers):

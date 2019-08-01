@@ -2,7 +2,7 @@ import getopt, sys, os
 import SimpleITK as sitk
 import torch
 import numpy as np
-import src.ScalingAndSquaring as sas
+import src.ScalingAndSquaringTmp as sas
 
 sys.path.insert(0,os.path.realpath('.'))
 import src.Utils
@@ -38,7 +38,7 @@ def main(argv):
     
     defFieldTorch = torch.from_numpy(defField) 
     
-    scalingSquaring = sas.ScalingAndSquaring(num_steps=2)
+    scalingSquaring = sas.ScalingAndSquaring(num_steps=9)
     
     deformationField = scalingSquaring(defFieldTorch)
     

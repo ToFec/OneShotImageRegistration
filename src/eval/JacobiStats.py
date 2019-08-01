@@ -7,20 +7,27 @@ import matplotlib.pyplot as plt
 def main(argv):
   
   try:
-    opts, args = getopt.getopt(argv, '', ['jcFile=', 'output='])
+    opts, args = getopt.getopt(argv, '', ['jcFile=', 'output=', 'mask='])
   except getopt.GetoptError, e:
     print(e)
     return
     
+  maskName=None
   for opt, arg in opts:
     if opt == '--jcFile':
       jcFile = arg
     elif opt == '--output':
       outputFileName = arg
+    elif opt == '--mask':
+      maskName = str(arg)      
 
-  
   jacobiImg = sitk.ReadImage(str(jcFile))
   jacobiImgData = sitk.GetArrayFromImage(jacobiImg)
+  
+  if maskName is not None:
+    maskImg = sitk.ReadImage(maskName)
+    maskData = sitk.GetArrayFromImage(maskImg)  
+    jacobiImgData = jacobiImgData[maskData > 0]
   
   mean= jacobiImgData.mean()
   min = jacobiImgData.min()
@@ -38,7 +45,7 @@ def main(argv):
 
   seperator = ';'
   resultFile = open(outputFileName,'a', buffering=0)
-  resultFile.write(str(negativeFragction) + seperator + str(mean) + seperator + str(std) + seperator + str(median) + seperator + str(min) + seperator + str(max) + '\n')
+  resultFile.write(str(negativeFragction) + seperator + str(mean) + seperator + str(std) + seperator + str(median) + seperator + str(min) + seperator + str(max) + seperator + str(jacobiImgData.size - np.count_nonzero(jacobiImgData)) + '\n')
   resultFile.close()
 
 

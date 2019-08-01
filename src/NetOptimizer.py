@@ -120,7 +120,7 @@ class NetOptimizer(object):
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
     
-    lossCalculator = lf.LossFunctions(labelToWork, addedField, currVecFields, self.spacing)
+    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currVecFields, self.spacing)
      
     boundaryLoss = 0.0
     
