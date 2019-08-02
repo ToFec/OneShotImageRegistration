@@ -38,7 +38,7 @@ def main(argv):
     
     defFieldTorch = torch.from_numpy(defField) 
     
-    scalingSquaring = sas.ScalingAndSquaring(num_steps=9)
+    scalingSquaring = sas.ScalingAndSquaring(num_steps=3)
     
     deformationField = scalingSquaring(defFieldTorch)
     

@@ -23,7 +23,7 @@ stoptAtSampleStep=3
 boundarySmoothnessW=(0.0,0.1,0.1)
 cycleW = 0.01
 if diffeomorphicRegistration:
-  smoothW = (0.0001,0.0001,0.001)
+  smoothW = (0.0001,0.0001,0.0001)
 else:
   smoothW = (0.0001,0.0001,0.0001)
 lossTollerances=(0.00001,)

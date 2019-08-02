@@ -245,6 +245,8 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   zeroIdxField[3] = zeroIdxField[3].round().long()
   zeroIdxField[2] = zeroIdxField[2].round().long()
   
+  boolMask = (((zeroIdxField[4] > (defField.shape[4] - 1)) | (zeroIdxField[4] < 0)) | ((zeroIdxField[3] > (defField.shape[3] - 1)) | (zeroIdxField[3] < 0)) | ((zeroIdxField[2] > (defField.shape[2] - 1)) | (zeroIdxField[2] < 0)))
+  
   zeroIdxField[4][zeroIdxField[4] > (defField.shape[4] - 1)] = defField.shape[4] - 1
   zeroIdxField[4][zeroIdxField[4] < 0] = 0
     
@@ -255,6 +257,7 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   zeroIdxField[2][zeroIdxField[2] < 0] = 0
   
   deformed = imgToDef[zeroIdxField[0], zeroIdxField[1], zeroIdxField[2], zeroIdxField[3], zeroIdxField[4]]
+  deformed[boolMask] = deformed[boolMask].detach()
   return deformed
   
 

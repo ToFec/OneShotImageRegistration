@@ -1,10 +1,8 @@
 
 import torch
 import LossFunctions as lf
-import numpy as np
 import Utils
 import ScalingAndSquaring as sas
-from scipy._lib import _tmpdirs
 
 class NetOptimizer(object):
 
@@ -119,10 +117,7 @@ class NetOptimizer(object):
     cropStart2 = int((imgDataToWork.shape[4]-vecFields.shape[4])/2)
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    
     lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currVecFields, self.spacing)
-     
-    boundaryLoss = 0.0
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW
@@ -130,6 +125,7 @@ class NetOptimizer(object):
     dscWeight = self.userOpts.dscWeight
     crossCorrWeight,smoothNessWeight, cyclicWeight, dscWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight, dscWeight)
     
+    boundaryLoss = 0.0
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
     
