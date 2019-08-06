@@ -3,15 +3,17 @@ import torch
 import LossFunctions as lf
 import Utils
 import ScalingAndSquaring as sas
+import GaussSmoothing as gs
 
 class NetOptimizer(object):
 
-  def __init__(self, net, spacing, optimizer,options):
+  def __init__(self, net, spacing, channels, optimizer,options):
     self.spacing = spacing
     self.optimizer = optimizer
     self.net = net
     self.userOpts = options
     self.scalingSquaring = sas.ScalingAndSquaring()
+    self.smoother = gs.GaussianSmoothing(channels, 7, 2,3,options.device)
 
   def setOptimizer(self, optimizer):
     self.optimizer = optimizer
@@ -107,6 +109,7 @@ class NetOptimizer(object):
     self.optimizer.zero_grad()
      
     vecFields = self.net(imgDataToWork)
+    vecFields = self.smoother(vecFields)    
       
     addedField = lastVecField[:, :, idx[0]:idx[0]+vecFields.shape[2], idx[1]:idx[1]+vecFields.shape[3], idx[2]:idx[2]+vecFields.shape[4]]+ vecFields
       
@@ -117,7 +120,7 @@ class NetOptimizer(object):
     cropStart2 = int((imgDataToWork.shape[4]-vecFields.shape[4])/2)
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    lossCalculator = lf.LossFunctions(imgDataToWork, addedField, currVecFields, self.spacing)
+    lossCalculator = lf.LossFunctions(imgDataToWork, vecFields, currVecFields, self.spacing)
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW
@@ -125,11 +128,13 @@ class NetOptimizer(object):
     dscWeight = self.userOpts.dscWeight
     crossCorrWeight,smoothNessWeight, cyclicWeight, dscWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight, dscWeight)
     
-    boundaryLoss = 0.0
+    boundaryLoss = torch.tensor(0.0,device=self.userOpts.device)
     if self.userOpts.boundarySmoothnessW[itIdx] > 0.0:
-      boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device)
+      boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device, addedField)
     
-    smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
+    smoothnessLoss = torch.tensor(0.0,device=self.userOpts.device)
+    if smoothNessWeight > 0.0:
+      smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
 
     if self.userOpts.diffeomorphicRegistration:
@@ -143,7 +148,7 @@ class NetOptimizer(object):
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
-    diceLoss = 0.0
+    diceLoss = torch.tensor(0.0,device=self.userOpts.device)
     if labelToWork is not None and dscWeight > 0.0:
       labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
       diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, deformationField, False)
@@ -155,4 +160,4 @@ class NetOptimizer(object):
           
     loss.backward()
     self.optimizer.step()
-    return loss        
+    return [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss]   

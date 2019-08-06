@@ -26,6 +26,12 @@ class GaussianSmoothing(nn.Module):
 
         # The gaussian kernel is the product of the
         # gaussian function of each dimension.
+        self.padVals = []
+        for ks in kernel_size:
+          padVal = int(ks / 2)
+          self.padVals.append(padVal)
+          self.padVals.append(padVal)
+        
         kernel = 1
         meshgrids = torch.meshgrid(
             [
@@ -67,4 +73,7 @@ class GaussianSmoothing(nn.Module):
         Returns:
             filtered (torch.Tensor): Filtered output.
         """
+        input = nn.functional.pad(input, self.padVals, "replicate")
         return self.conv(input, weight=self.weight, groups=self.groups)
+      
+      

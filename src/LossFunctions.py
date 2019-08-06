@@ -127,7 +127,7 @@ class LossFunctions():
     return loss.sum() / vecFields.shape[0]
   
 
-  def smoothBoundary(self, idx, device0):
+  def smoothBoundary(self, idx, device0, addedField):
     loss00 = torch.tensor(0.0, device=device0)
     loss01 =torch.tensor(0.0, device=device0)
     loss11= torch.tensor(0.0, device=device0)
@@ -135,7 +135,7 @@ class LossFunctions():
     loss20= torch.tensor(0.0, device=device0)
     loss21 = torch.tensor(0.0, device=device0)
     currDefFields = self.currDefFields
-    defFields = self.defFields
+    defFields = addedField
     if idx[0] > 0:
       loss000 = currDefFields[:,:,idx[0]-1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,0,:,:]
       loss001 = (currDefFields[:,:,idx[0]-1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,1,:,:]) * 0.8

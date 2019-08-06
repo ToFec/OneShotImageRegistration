@@ -28,6 +28,8 @@ class Optimize():
     
     logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
     self.logFile = open(logfileName,'w')
+    self.logFile.write('PatchIdx;Loss;CrossCorr;DSC;Smmoth;Cycle\n')
+    self.logFile.flush()
     
   def __enter__(self):
         return self
@@ -153,7 +155,7 @@ class Optimize():
         break
     for i in range(radius,0,-1):
       if newIdx[0] < currDeffield.shape[2] - newIdx[3] - i:
-        newIdx[3] = newIdx[3] + 1 + 1
+        newIdx[3] = newIdx[3] + i + 1
         break      
     for i in range(radius,-1,-1):
       if idx[1] > 0:
@@ -214,7 +216,7 @@ class Optimize():
         optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
         
         start = time.time()
-        netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), optimizer, self.userOpts)
+        netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), data['image'].shape[1]*3, optimizer, self.userOpts)
         
         samplerShift = (0,0,0)
         if not self.userOpts.usePaddedNet:
@@ -261,15 +263,23 @@ class Optimize():
               patchIteration=0
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
+              runningCC = torch.ones(10, device=self.userOpts.device)
+              runningDSC = torch.ones(10, device=self.userOpts.device)
+              runningSmmoth = torch.ones(10, device=self.userOpts.device)
+              runningCycle = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
+                [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
                 if printLossAndCropGrads:
                   self.printParameterInfo()
                 detachLoss = loss.detach()                
                 runningLoss[lossCounter] = detachLoss
+                runningCC[lossCounter] = crossCorr.detach()
+                runningDSC[lossCounter] = diceLoss.detach()
+                runningSmmoth[lossCounter] = smoothnessDF.detach()
+                runningCycle[lossCounter] = cycleLoss.detach()
                 if lossCounter == 9:
                   meanLoss = runningLoss.mean()
-                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
+                  self.logFile.write(str(patchIdx) + ';' + str(float(meanLoss)) + ';' + str(float(runningCC.mean())) + ';' + str(float(runningDSC.mean())) + ';' + str(float(runningSmmoth.mean())) + ';' + str(float(runningCycle.mean())) + ';' + '\n')
                   self.logFile.flush()
                   lossCounter = 0
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
