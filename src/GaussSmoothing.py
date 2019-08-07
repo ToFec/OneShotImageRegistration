@@ -73,7 +73,8 @@ class GaussianSmoothing(nn.Module):
         Returns:
             filtered (torch.Tensor): Filtered output.
         """
-        input = nn.functional.pad(input, self.padVals, "replicate")
+        ## padding deactivated as replicate padding has nondeterministic behaviour
+#         input = nn.functional.pad(input, self.padVals, "replicate")
         return self.conv(input, weight=self.weight, groups=self.groups)
       
       

@@ -1,19 +1,17 @@
 
 import torch
-import LossFunctions as lf
 import Utils
 import ScalingAndSquaring as sas
 import GaussSmoothing as gs
 
 class NetOptimizer(object):
 
-  def __init__(self, net, spacing, channels, optimizer,options):
-    self.spacing = spacing
+  def __init__(self, net, channels, optimizer,options):
     self.optimizer = optimizer
     self.net = net
     self.userOpts = options
-    self.scalingSquaring = sas.ScalingAndSquaring()
-    self.smoother = gs.GaussianSmoothing(channels, 7, 2,3,options.device)
+    self.scalingSquaring = sas.ScalingAndSquaring(options.sasSteps)
+    self.smoother = gs.GaussianSmoothing(channels, options.finalGaussKernelSize, options.finalGaussKernelStd,3,options.device)
 
   def setOptimizer(self, optimizer):
     self.optimizer = optimizer
@@ -104,23 +102,28 @@ class NetOptimizer(object):
         
     return torch.cat(cycleImageDataList, dim=1), outOfBoundsTensor  
   
-  def optimizeNet(self, imgDataToWork, labelToWork, lastVecField = None, currVecFields = None, idx=None, itIdx=0, printLoss = False):
+  def optimizeNet(self, imgDataToWork, lossCalculator, labelToWork, lastVecField = None, currVecFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
-    vecFields = self.net(imgDataToWork)
-    vecFields = self.smoother(vecFields)    
-      
-    addedField = lastVecField[:, :, idx[0]:idx[0]+vecFields.shape[2], idx[1]:idx[1]+vecFields.shape[3], idx[2]:idx[2]+vecFields.shape[4]]+ vecFields
-      
-    currVecFields[:, :, idx[0]:idx[0]+vecFields.shape[2], idx[1]:idx[1]+vecFields.shape[3], idx[2]:idx[2]+vecFields.shape[4]] = addedField.detach()
+    vecFieldsTmp = self.net(imgDataToWork)
+    vecFields = self.smoother(vecFieldsTmp)    
 
     cropStart0 = int((imgDataToWork.shape[2]-vecFields.shape[2])/2)
     cropStart1 = int((imgDataToWork.shape[3]-vecFields.shape[3])/2)
     cropStart2 = int((imgDataToWork.shape[4]-vecFields.shape[4])/2)
+      
+    addedField = lastVecField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+                               idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
+                               idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]]+ vecFields
+      
+    currVecFields[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+                   idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
+                   idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]] = addedField.detach()
+
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    lossCalculator = lf.LossFunctions(imgDataToWork, vecFields, currVecFields, self.spacing)
+    lossCalculator.update(imgDataToWork, vecFields, currVecFields)
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW

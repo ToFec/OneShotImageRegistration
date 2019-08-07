@@ -1,7 +1,7 @@
 import torch
 from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
 import numpy as np
-from Options import netDepth, netMinPatchSize, netMinPatchSizePadded, usePaddedNet
+from Options import netDepth, netMinPatchSize, netMinPatchSizePadded
 
 class Sampler(object):
 
@@ -133,6 +133,8 @@ class Sampler(object):
   def getIndicesForUniformSamplingPathShiftNoOverlap(self, patchShift, useMedian=True, offset=0):
     imgShape = self.imgData.shape
 
+    print(imgShape)
+
     if useMedian is not None:
       if useMedian:
         iterateMethod = self.iterateImgMedian
@@ -142,10 +144,21 @@ class Sampler(object):
       iterateMethod = self.iterateImg
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
-       
-    leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
-    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
-    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
+    
+    if imgShape[2] <= self.patchSizes[0]:
+      leftover0 = 0
+    else:
+      leftover0 = imgShape[2] % patchShift[0]
+    if imgShape[3] <= self.patchSizes[1]:
+      leftover1 = 0
+    else:
+      leftover1 = imgShape[3] % patchShift[1]
+      
+    if imgShape[4] <= self.patchSizes[2]:
+      leftover2 = 0
+    else:
+      leftover2 = imgShape[4] % patchShift[2]
+    
     
     oldPatchSize = list(self.patchSizes)
     if leftover0 > 0:
@@ -235,13 +248,9 @@ class Sampler(object):
   def getNextPatchSize(self, leftover):
     nuOfDownSampleLayers = netDepth - 1
     modValue = 2**(nuOfDownSampleLayers)
-    if not usePaddedNet:
-      leftover = leftover + 2*getReceptiveFieldOffset(netDepth)
-      minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
-    else:
-      minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
+    minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
     if minPatchSize % modValue != 0:
-      minPatchSize = (int(minPatchSize / modValue) * modValue)
+      minPatchSize = (int(np.ceil(minPatchSize / float(modValue))) * modValue)
     return minPatchSize
     
     

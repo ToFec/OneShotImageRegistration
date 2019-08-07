@@ -5,17 +5,28 @@ import GaussSmoothing as gs
 
 class LossFunctions():
   
-  def __init__(self, imgDataToWork, defFields, currDefFields, spacing):
+  def __init__(self, imgDataToWork, spacing):
     self.imgData = imgDataToWork
-    self.defFields = defFields
-    self.currDefFields = currDefFields
+    self.defFields = None
+    self.currDefFields = None
     self.dimWeight = spacing
+    self.initGaussKernels(imgDataToWork)
     
+    
+  def initGaussKernels(self, imgDataToWork):
     self.gaussSmothingKernels = []
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3,imgDataToWork.device))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3,imgDataToWork.device))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
     self.diceKernelMapping = {}
+
+  def update(self, imgDataToWork, defFields, currDefFields):
+    if self.imgData.shape != imgDataToWork.shape:
+      self.imgData = imgDataToWork
+      self.initGaussKernels(imgDataToWork)
+      
+    self.defFields = defFields
+    self.currDefFields = currDefFields
 
   #only for 2 labels
   def dice_coeff(self, y_true, y_pred):

@@ -206,7 +206,6 @@ class Optimize():
       
       numberOfiterations = self.userOpts.numberOfEpochs
       
-      receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
       printLossAndCropGrads = False
       for i, data in enumerate(dataloader, 0):
         torch.manual_seed(0)
@@ -216,14 +215,15 @@ class Optimize():
         optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
         
         start = time.time()
-        netOptim = NetOptimizer.NetOptimizer(self.net, dataloader.dataset.getSpacingXZFlip(i), data['image'].shape[1]*3, optimizer, self.userOpts)
+        netOptim = NetOptimizer.NetOptimizer(self.net, data['image'].shape[1]*3, optimizer, self.userOpts)
         
-        samplerShift = (0,0,0)
-        if not self.userOpts.usePaddedNet:
-          padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
-          data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
-          samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
         
+        patchShift = int(self.userOpts.finalGaussKernelSize/2)
+        modValue = 2**(self.userOpts.netDepth - 1)
+        padVal = (int(np.ceil(patchShift / float(modValue))) * modValue)
+        
+        padVals = (padVal, padVal, padVal, padVal, padVal, padVal)
+        samplerShift = (patchShift*2,patchShift*2,patchShift*2)
         samplingRates = self.getDownSampleRates()
         
         self.net.train()
@@ -232,13 +232,18 @@ class Optimize():
           print('sampleRate: ', samplingRate)
          
           sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+          if currVectorField is None:
+            currVectorField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device="cpu", requires_grad=False)
+          
+          sampledImgData, sampledMaskData, sampledLabelData = getPaddedData(sampledImgData, sampledMaskData, sampledLabelData, padVals)
+          currVectorField, _, _ = getPaddedData(currVectorField, None, None, padVals)
+          
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
           print('idxs: ', idxs)
+                
           
-          if currVectorField is None:
-            currVectorField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device="cpu", requires_grad=False)
           
           for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
@@ -247,7 +252,6 @@ class Optimize():
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 
-              
               optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
               netOptim.setOptimizer(optimizer)
               
@@ -267,8 +271,11 @@ class Optimize():
               runningDSC = torch.ones(10, device=self.userOpts.device)
               runningSmmoth = torch.ones(10, device=self.userOpts.device)
               runningCycle = torch.ones(10, device=self.userOpts.device)
+              
+              lossCalculator = lf.LossFunctions(imgDataToWork, dataloader.dataset.getSpacingXZFlip(i))
+              
               while True:
-                [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
+                [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, lossCalculator, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
                 if printLossAndCropGrads:
                   self.printParameterInfo()
                 detachLoss = loss.detach()                
@@ -296,15 +303,14 @@ class Optimize():
               else:
                 nextSamplingRate = samplingRates[samplingRateIdx+1]
               upSampleRate = nextSamplingRate / samplingRate
+              currVectorField = currVectorField[:,:,padVal:-padVal,padVal:-padVal,padVal:-padVal]
               currVectorField = currVectorField * upSampleRate
               currVectorField = sampleImg(currVectorField, upSampleRate)
               
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
-        if not self.userOpts.usePaddedNet:
-          data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
-        
         currVectorField = currVectorField.to(self.userOpts.device)
+        
         
         if self.userOpts.diffeomorphicRegistration:
           scalingSquaring = sas.ScalingAndSquaring()

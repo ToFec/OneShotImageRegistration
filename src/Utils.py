@@ -360,11 +360,11 @@ def sampleImg(img, samplingRate):
   
 def getPaddedData(imgData, maskData, labelData, padVals):
   imgData = torch.nn.functional.pad(imgData, padVals, "constant", 0)
-  if (maskData.dim() == imgData.dim()):
+  if ((maskData is not None) and (maskData.dim() == imgData.dim())):
     maskData = maskData.float()
     maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
     maskData = maskData.byte()
-  if (labelData.dim() == imgData.dim()):
+  if ((labelData is not None) and (labelData.dim() == imgData.dim())):
     labelData = labelData.float()
     labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
     labelData = labelData.byte()
