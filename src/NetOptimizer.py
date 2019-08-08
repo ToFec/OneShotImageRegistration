@@ -123,7 +123,7 @@ class NetOptimizer(object):
 
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    lossCalculator.update(imgDataToWork, vecFields, currVecFields)
+    lossCalculator.update(imgDataToWork, vecFields, None)
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW

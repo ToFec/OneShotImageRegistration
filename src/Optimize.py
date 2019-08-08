@@ -205,7 +205,7 @@ class Optimize():
         iterationValidation = self.terminateLoopByItCount
       
       numberOfiterations = self.userOpts.numberOfEpochs
-      
+      lossTollerance=self.userOpts.lossTollerances
       printLossAndCropGrads = False
       for i, data in enumerate(dataloader, 0):
         torch.manual_seed(0)
@@ -242,68 +242,76 @@ class Optimize():
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
           print('idxs: ', idxs)
-                
           
-          
-          for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
-            print('lossTollerance: ', lossTollerance)
-            
-            lastVectorField = currVectorField.clone()
-            for patchIdx, idx in enumerate(idxs):
-              print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+          lastVectorField = currVectorField.clone()
+          currVectorField.fill_(0)
+          indexArray = torch.zeros((currVectorField.shape[2], currVectorField.shape[3], currVectorField.shape[4]), requires_grad=False, device="cpu")
 
-              optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
-              netOptim.setOptimizer(optimizer)
-              
-              imgDataToWork, labelDataToWork = sampler.getSubSample(idx, self.userOpts.normImgPatches)
-              imgDataToWork = imgDataToWork.to(self.userOpts.device)
-              if labelDataToWork is not None:
-                labelDataToWork = labelDataToWork.to(self.userOpts.device)
-              
-              currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currVectorField, idx)
-              currVectorFieldGPU = currVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
-              lastVectorFieldGPU = lastVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
-              
-              patchIteration=0
-              lossCounter = 0
-              runningLoss = torch.ones(10, device=self.userOpts.device)
-              runningCC = torch.ones(10, device=self.userOpts.device)
-              runningDSC = torch.ones(10, device=self.userOpts.device)
-              runningSmmoth = torch.ones(10, device=self.userOpts.device)
-              runningCycle = torch.ones(10, device=self.userOpts.device)
-              
-              lossCalculator = lf.LossFunctions(imgDataToWork, dataloader.dataset.getSpacingXZFlip(i))
-              
-              while True:
-                [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, lossCalculator, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
-                if printLossAndCropGrads:
-                  self.printParameterInfo()
-                detachLoss = loss.detach()                
-                runningLoss[lossCounter] = detachLoss
-                runningCC[lossCounter] = crossCorr.detach()
-                runningDSC[lossCounter] = diceLoss.detach()
-                runningSmmoth[lossCounter] = smoothnessDF.detach()
-                runningCycle[lossCounter] = cycleLoss.detach()
-                if lossCounter == 9:
-                  meanLoss = runningLoss.mean()
-                  self.logFile.write(str(patchIdx) + ';' + str(float(meanLoss)) + ';' + str(float(runningCC.mean())) + ';' + str(float(runningDSC.mean())) + ';' + str(float(runningSmmoth.mean())) + ';' + str(float(runningCycle.mean())) + ';' + '\n')
-                  self.logFile.flush()
-                  lossCounter = 0
-                  if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
-                    break
-                else:
-                  lossCounter+=1
-                patchIteration+=1
-              currVectorField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currVectorFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
-              
+          for patchIdx, idx in enumerate(idxs):
+            print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
+
+            optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+            netOptim.setOptimizer(optimizer)
+            
+            imgDataToWork, labelDataToWork = sampler.getSubSample(idx, self.userOpts.normImgPatches)
+            imgDataToWork = imgDataToWork.to(self.userOpts.device)
+            if labelDataToWork is not None:
+              labelDataToWork = labelDataToWork.to(self.userOpts.device)
+            
+            currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currVectorField, idx)
+            currVectorFieldGPU = currVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+            lastVectorFieldGPU = lastVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+            
+            patchIteration=0
+            lossCounter = 0
+            runningLoss = torch.ones(10, device=self.userOpts.device)
+            runningCC = torch.ones(10, device=self.userOpts.device)
+            runningDSC = torch.ones(10, device=self.userOpts.device)
+            runningSmmoth = torch.ones(10, device=self.userOpts.device)
+            runningCycle = torch.ones(10, device=self.userOpts.device)
+            
+            lossCalculator = lf.LossFunctions(imgDataToWork, dataloader.dataset.getSpacingXZFlip(i))
+            
+            while True:
+              [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, lossCalculator, labelDataToWork, lastVectorFieldGPU, currVectorFieldGPU, offset, samplingRateIdx, printLossAndCropGrads)
+              if printLossAndCropGrads:
+                self.printParameterInfo()
+              detachLoss = loss.detach()                
+              runningLoss[lossCounter] = detachLoss
+              runningCC[lossCounter] = crossCorr.detach()
+              runningDSC[lossCounter] = diceLoss.detach()
+              runningSmmoth[lossCounter] = smoothnessDF.detach()
+              runningCycle[lossCounter] = cycleLoss.detach()
+              if lossCounter == 9:
+                meanLoss = runningLoss.mean()
+                self.logFile.write(str(patchIdx) + ';' + str(float(meanLoss)) + ';' + str(float(runningCC.mean())) + ';' + str(float(runningDSC.mean())) + ';' + str(float(runningSmmoth.mean())) + ';' + str(float(runningCycle.mean())) + ';' + '\n')
+                self.logFile.flush()
+                lossCounter = 0
+                if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
+                  break
+              else:
+                lossCounter+=1
+              patchIteration+=1
+            currVectorField[:, :, idx[0]+patchShift:idx[0]+imgDataToWork.shape[2]-patchShift, 
+                            idx[1]+patchShift:idx[1]+imgDataToWork.shape[3]-patchShift, 
+                            idx[2]+patchShift:idx[2]+imgDataToWork.shape[4]-patchShift] += currVectorFieldGPU[:,:,offset[0]+patchShift:offset[0]+imgDataToWork.shape[2]-patchShift,offset[1]+patchShift:offset[1]+imgDataToWork.shape[3]-patchShift,offset[2]+patchShift:offset[2]+imgDataToWork.shape[4]-patchShift].to("cpu")
+            indexArray[idx[0]+patchShift:idx[0]+imgDataToWork.shape[2]-patchShift, 
+                       idx[1]+patchShift:idx[1]+imgDataToWork.shape[3]-patchShift, 
+                       idx[2]+patchShift:idx[2]+imgDataToWork.shape[4]-patchShift] += 1
+            
           with torch.no_grad():
+            indexArray[indexArray < 1] = 1
+            currVectorField = currVectorField / indexArray[None,None,...]
+            
+            indexArray = indexArray[padVal:-padVal,padVal:-padVal,padVal:-padVal]
+            del indexArray
+            currVectorField = currVectorField[:,:,padVal:-padVal,padVal:-padVal,padVal:-padVal]
             if samplingRate < 1:
               if samplingRateIdx+1 == len(samplingRates):
                 nextSamplingRate = 1.0
               else:
                 nextSamplingRate = samplingRates[samplingRateIdx+1]
               upSampleRate = nextSamplingRate / samplingRate
-              currVectorField = currVectorField[:,:,padVal:-padVal,padVal:-padVal,padVal:-padVal]
               currVectorField = currVectorField * upSampleRate
               currVectorField = sampleImg(currVectorField, upSampleRate)
               
@@ -311,9 +319,8 @@ class Optimize():
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         currVectorField = currVectorField.to(self.userOpts.device)
         
-        
         if self.userOpts.diffeomorphicRegistration:
-          scalingSquaring = sas.ScalingAndSquaring()
+          scalingSquaring = sas.ScalingAndSquaring(self.userOpts.sasSteps)
           deformationField = scalingSquaring(currVectorField)
         else:
           deformationField = currVectorField

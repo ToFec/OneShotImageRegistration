@@ -97,7 +97,8 @@ class Sampler(object):
   
   def getIndicesForOneShotSampling(self, minusShift, medianSampler=True):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
-    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
+    return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))
+#     return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
   
   def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
@@ -220,12 +221,23 @@ class Sampler(object):
       iterateMethod = self.iterateImgSum
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
+    
+    if imgShape[2] <= self.patchSizes[0]:
+      leftover0 = 0
+    else:
+      leftover0 = imgShape[2] % patchShift[0]
+    if imgShape[3] <= self.patchSizes[1]:
+      leftover1 = 0
+    else:
+      leftover1 = imgShape[3] % patchShift[1]
+      
+    if imgShape[4] <= self.patchSizes[2]:
+      leftover2 = 0
+    else:
+      leftover2 = imgShape[4] % patchShift[2]    
        
-    leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
     startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
-    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1] 
     startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
-    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2] 
     startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
     
     if startidx0 > 0:
