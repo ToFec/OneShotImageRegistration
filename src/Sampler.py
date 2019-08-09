@@ -95,10 +95,10 @@ class Sampler(object):
   
     return idxs
   
-  def getIndicesForOneShotSampling(self, minusShift, medianSampler=True):
+  def getIndicesForOneShotSampling(self, minusShift, medianSampler=False):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
-    return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))
-#     return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
+#     return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))
+    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
   
   def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
@@ -131,7 +131,7 @@ class Sampler(object):
     return idxs   
             
  
-  def getIndicesForUniformSamplingPathShiftNoOverlap(self, patchShift, useMedian=True, offset=0):
+  def getIndicesForUniformSamplingPathShiftNoOverlap(self, patchShift, useMedian=False, offset=0):
     imgShape = self.imgData.shape
 
     print(imgShape)
@@ -146,20 +146,7 @@ class Sampler(object):
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
     
-    if imgShape[2] <= self.patchSizes[0]:
-      leftover0 = 0
-    else:
-      leftover0 = imgShape[2] % patchShift[0]
-    if imgShape[3] <= self.patchSizes[1]:
-      leftover1 = 0
-    else:
-      leftover1 = imgShape[3] % patchShift[1]
-      
-    if imgShape[4] <= self.patchSizes[2]:
-      leftover2 = 0
-    else:
-      leftover2 = imgShape[4] % patchShift[2]
-    
+    leftover0, leftover1, leftover2 = self.getLeftovers(imgShape, patchShift)
     
     oldPatchSize = list(self.patchSizes)
     if leftover0 > 0:
@@ -211,8 +198,33 @@ class Sampler(object):
         idxs = idxs + iterateMethod((startidx0, 0, startidx2), patchShift, offset)
       
     return idxs
+        
+        
+  def getLeftovers(self, imgShape, patchShift):
+    if imgShape[2] <= self.patchSizes[0]:
+      leftover0 = 0
+    else:
+      leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
+      if leftover0 > 0:
+        leftover0 = leftover0 + self.patchSizes[0] - patchShift[0]
+    
+    if imgShape[3] <= self.patchSizes[1]:
+      leftover1 = 0
+    else:
+      leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
+      if leftover1 > 0:
+        leftover1 = leftover1 + self.patchSizes[1] - patchShift[1]
+      
+    if imgShape[4] <= self.patchSizes[2]:
+      leftover2 = 0
+    else:
+      leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
+      if leftover2 > 0:
+        leftover2 = leftover2 + self.patchSizes[2] - patchShift[2]
+        
+    return leftover0, leftover1, leftover2
             
-  def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=True, offset=0):
+  def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=False, offset=0):
     imgShape = self.imgData.shape
 
     if useMedian:
@@ -222,20 +234,8 @@ class Sampler(object):
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
     
-    if imgShape[2] <= self.patchSizes[0]:
-      leftover0 = 0
-    else:
-      leftover0 = imgShape[2] % patchShift[0]
-    if imgShape[3] <= self.patchSizes[1]:
-      leftover1 = 0
-    else:
-      leftover1 = imgShape[3] % patchShift[1]
-      
-    if imgShape[4] <= self.patchSizes[2]:
-      leftover2 = 0
-    else:
-      leftover2 = imgShape[4] % patchShift[2]    
-       
+    leftover0, leftover1, leftover2 = self.getLeftovers(imgShape, patchShift)
+    
     startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
     startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
     startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0

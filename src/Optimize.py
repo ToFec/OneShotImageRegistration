@@ -223,7 +223,7 @@ class Optimize():
         padVal = (int(np.ceil(patchShift / float(modValue))) * modValue)
         
         padVals = (padVal, padVal, padVal, padVal, padVal, padVal)
-        samplerShift = (patchShift*2,patchShift*2,patchShift*2)
+        samplerShift = (patchShift*4,patchShift*4,patchShift*4)
         samplingRates = self.getDownSampleRates()
         
         self.net.train()
@@ -239,7 +239,7 @@ class Optimize():
           currVectorField, _, _ = getPaddedData(currVectorField, None, None, padVals)
           
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
-          idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift)
           
           print('idxs: ', idxs)
           
@@ -304,6 +304,7 @@ class Optimize():
             currVectorField = currVectorField / indexArray[None,None,...]
             
             indexArray = indexArray[padVal:-padVal,padVal:-padVal,padVal:-padVal]
+            
             del indexArray
             currVectorField = currVectorField[:,:,padVal:-padVal,padVal:-padVal,padVal:-padVal]
             if samplingRate < 1:

@@ -106,8 +106,9 @@ class NetOptimizer(object):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
-    vecFieldsTmp = self.net(imgDataToWork)
-    vecFields = self.smoother(vecFieldsTmp)    
+    vecFields = self.net(imgDataToWork)
+    if self.userOpts.diffeomorphicRegistration:
+      vecFields = self.smoother(vecFields)    
 
     cropStart0 = int((imgDataToWork.shape[2]-vecFields.shape[2])/2)
     cropStart1 = int((imgDataToWork.shape[3]-vecFields.shape[3])/2)

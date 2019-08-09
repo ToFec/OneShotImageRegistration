@@ -21,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'noDiff', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -46,6 +46,8 @@ def main(argv):
       userOpts.downSampleSteps = int(arg)      
     elif opt == '--cycleW':
       userOpts.cycleW = float(arg)
+    elif opt == '--noDiff':
+      userOpts.diffeomorphicRegistration = False      
     elif opt == '--smoothW':
       stringList = arg.split()
       userOpts.smoothW = [float(i) for i in stringList]  
