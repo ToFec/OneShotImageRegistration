@@ -58,9 +58,9 @@ class LossFunctions():
       trueLabelVol[y_true == label ] = 1.0
       defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1)
 
-      intersection = torch.sum(trueLabelVol * defLabelVol, dtype=torch.float32)
+      intersection = torch.sum(trueLabelVol * defLabelVol)
       
-      labelSum = (torch.sum(defLabelVol, dtype=torch.float32) + torch.sum(trueLabelVol, dtype=torch.float32))
+      labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
       denominator = denominator + labelSum
       numerator = numerator + intersection
       
@@ -86,8 +86,8 @@ class LossFunctions():
           defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
                                                                               int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
                                                                               int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1)    
-          intersection = torch.sum(trueLabelVol * defLabelVol, dtype=torch.float32)
-          labelSum = (torch.sum(defLabelVol, dtype=torch.float32) + torch.sum(trueLabelVol, dtype=torch.float32))
+          intersection = torch.sum(trueLabelVol * defLabelVol)
+          labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
           denominator = denominator + labelSum
           numerator = numerator + intersection
         dice = 2. * numerator / (denominator + smooth)

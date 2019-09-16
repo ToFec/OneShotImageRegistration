@@ -365,9 +365,7 @@ def getPaddedData(imgData, maskData, labelData, padVals):
     maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
     maskData = maskData.byte()
   if ((labelData is not None) and (labelData.dim() == imgData.dim())):
-    labelData = labelData.float()
     labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
-    labelData = labelData.byte()
     
   return (imgData, maskData, labelData)
 

@@ -124,7 +124,7 @@ class NetOptimizer(object):
 
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    lossCalculator.update(imgDataToWork, vecFields, None)
+    lossCalculator.update(imgDataToWork, vecFields, currVecFields)
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW
@@ -137,7 +137,7 @@ class NetOptimizer(object):
       boundaryLoss = lossCalculator.smoothBoundary(idx, self.userOpts.device, addedField)
     
     smoothnessLoss = torch.tensor(0.0,device=self.userOpts.device)
-    if smoothNessWeight > 0.0:
+    if self.userOpts.smoothVF:
       smoothnessLoss = lossCalculator.smoothnessVecField(self.userOpts.device)
     smoothnessDF = smoothnessLoss + boundaryLoss * self.userOpts.boundarySmoothnessW[itIdx]
 

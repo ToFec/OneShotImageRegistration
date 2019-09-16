@@ -223,7 +223,7 @@ class Optimize():
         padVal = (int(np.ceil(patchShift / float(modValue))) * modValue)
         
         padVals = (padVal, padVal, padVal, padVal, padVal, padVal)
-        samplerShift = (patchShift*4,patchShift*4,patchShift*4)
+        samplerShift = (patchShift*2,patchShift*2,patchShift*2)
         samplingRates = self.getDownSampleRates()
         
         self.net.train()
@@ -239,7 +239,7 @@ class Optimize():
           currVectorField, _, _ = getPaddedData(currVectorField, None, None, padVals)
           
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
-          idxs = sampler.getIndicesForOneShotSampling(samplerShift)
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
           print('idxs: ', idxs)
           
@@ -250,6 +250,7 @@ class Optimize():
           for patchIdx, idx in enumerate(idxs):
             print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
 
+#             self.net.reset_params()
             optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
             netOptim.setOptimizer(optimizer)
             
@@ -260,6 +261,9 @@ class Optimize():
             
             currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currVectorField, idx)
             currVectorFieldGPU = currVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+            idxGPU = indexArray[currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+            idxGPU[idxGPU < 1] = 1
+            currVectorFieldGPU = currVectorFieldGPU / idxGPU[None,None,...]
             lastVectorFieldGPU = lastVectorField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
             
             patchIteration=0
@@ -300,10 +304,14 @@ class Optimize():
                        idx[2]+patchShift:idx[2]+imgDataToWork.shape[4]-patchShift] += 1
             
           with torch.no_grad():
+            currVectorField[:,:,indexArray < 1] = lastVectorField[:,:,indexArray < 1]
             indexArray[indexArray < 1] = 1
             currVectorField = currVectorField / indexArray[None,None,...]
             
             indexArray = indexArray[padVal:-padVal,padVal:-padVal,padVal:-padVal]
+            
+            idxArray = sitk.GetImageFromArray(indexArray.cpu())
+            dataloader.dataset.saveData(idxArray, self.userOpts.outputPath, 'idxArray.nrrd', 0, False)
             
             del indexArray
             currVectorField = currVectorField[:,:,padVal:-padVal,padVal:-padVal,padVal:-padVal]
@@ -318,14 +326,17 @@ class Optimize():
               
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
-        currVectorField = currVectorField.to(self.userOpts.device)
-        
-        if self.userOpts.diffeomorphicRegistration:
-          scalingSquaring = sas.ScalingAndSquaring(self.userOpts.sasSteps)
-          deformationField = scalingSquaring(currVectorField)
-        else:
-          deformationField = currVectorField
-        
-        self.saveResults(data, deformationField, dataloader, i)                  
+        with torch.no_grad():
+          
+          if self.userOpts.diffeomorphicRegistration:
+            currVectorField = currVectorField.to('cpu') # for big datasets we run out of memory when scaling and squaring is run on gpu
+            scalingSquaring = sas.ScalingAndSquaring(self.userOpts.sasSteps)
+            deformationField = scalingSquaring(currVectorField)
+            deformationField = deformationField.to(self.userOpts.device)
+          else:
+            currVectorField = currVectorField.to(self.userOpts.device)
+            deformationField = currVectorField
+          
+          self.saveResults(data, deformationField, dataloader, i)                  
 
 
