@@ -195,6 +195,54 @@ class Optimize():
         
       print(total_norm, maxNorm, maxVal)
 #       print(dataMean)
+  
+  def trainNetDownSamplePatch(self, dataloader):
+    self.net.train()
+    if self.userOpts.trainTillConvergence:
+      iterationValidation = self.terminateLoopByLossAndItCount
+    else:
+      iterationValidation = self.terminateLoopByItCount
+    numberOfEpochs = self.userOpts.numberOfEpochs
+    receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
+    padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
+    samplingRates = self.getDownSampleRates()
+    
+    resultModels = []
+    for samplingRateIdx, samplingRate in enumerate(samplingRates):
+      torch.manual_seed(0)
+      torch.cuda.manual_seed(0)
+      np.random.seed(0)
+      self.net.reset_params()
+      optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+      netOptim = NetOptimizer.NetOptimizer(self.net, None, optimizer, self.userOpts)
+      for epoch in range(numberOfEpochs):
+        for i, data in enumerate(dataloader, 0):
+          netOptim.setSpacing(dataloader.dataset.getSpacingXZFlip(i))
+          if not self.userOpts.usePaddedNet:
+            data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
+            
+          currDefField = None
+          for previousSampleIdxs in range(samplingRateIdx):
+            modelToApply = resultModels[previousSampleIdxs]
+            defField = modelToApply(data['image'])
+            if currDefField is None:
+              currDefField = defField
+            else:
+              combineFields(currDefField, defField)
+            
+          
+          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
+          numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[0] * self.userOpts.patchSize[1] * self.userOptspatchSize[2]))
+          if numberofSamplesPerRun < 1:
+            numberofSamplesPerRun = 1
+#TODO implement random samples with same size           
+          idxs = sampler.getIndicesForRandomization()
+          (imgDataToWork, labelDataToWork) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs)
+          for sample in numberofSamplesPerRun:
+            
+            loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...], labelDataToWork[sample,None,...], lastDeffieldGPU, offset, samplingRateIdx)
+            
          
   def trainTestNetDownSamplePatch(self, dataloader):
       if self.userOpts.trainTillConvergence:
@@ -259,7 +307,7 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNet(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
+                loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
                 if printLossAndCropGrads:
                   self.printParameterInfo()
                 detachLoss = loss.detach()                

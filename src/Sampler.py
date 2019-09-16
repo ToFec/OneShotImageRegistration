@@ -16,7 +16,7 @@ class Sampler(object):
     self.maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
     self.patchSizes = getPatchSize(imgData.shape, imgPatchSize)
 
-  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, currIteration=0, normImgPatch=False):
+  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, normImgPatch=False):
    
     imgDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
     if (self.labelData.dim() == self.imgData.dim()):
