@@ -13,6 +13,7 @@ import time
 from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
 from Net import UNet
 import Options as userOpts
+from __builtin__ import hasattr
 
 def main(argv):
   
@@ -34,6 +35,8 @@ def main(argv):
   for opt, arg in opts:
     if opt == '--trainingFiles':
       userOpts.trainingFileNamesCSV = arg
+    elif opt == '--validationFiles':
+      userOpts.validationFileNameCSV = arg      
     elif opt == '--device':
       userOpts.device = arg      
     elif opt == '--outputPath':
@@ -59,9 +62,14 @@ def main(argv):
     os.makedirs(userOpts.outputPath)
 
   headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True)
+  if hasattr(userOpts, 'validationFileNameCSV'):
+    validationSet = HeadAndNeckDataset(userOpts.validationFileNameCSV, ToTensor(), True)
+    validationDataLoader = DataLoader(validationSet, batch_size=1, shuffle=False, num_workers=0)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
+  
+
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
   with Optimize(net, userOpts) as trainTestOptimize:
@@ -72,14 +80,20 @@ def main(argv):
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
+        if hasattr(userOpts, 'validationFileNameCSV'):
+          p = mp.Process(target=trainTestOptimize.trainNetDownSamplePatch, args=(dataloader, validationDataLoader))
+        else:
+          p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
         p.start()
         processes.append(p)
       for p in processes:
         p.join()
           
     else:
-      trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
+      if hasattr(userOpts, 'validationFileNameCSV'):
+        trainTestOptimize.trainNetDownSamplePatch(dataloader, validationDataLoader)
+      else:
+        trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
     end = time.time()
     print('Registration took overall:', end - start, 'seconds')
     

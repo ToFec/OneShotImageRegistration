@@ -322,3 +322,16 @@ def save_grad(name):
       print(name, np.float64(torch.sum(grad)))
 
   return hook
+
+# TODO: TEST
+def combineDeformationFields(defField0, defField1, requiresGrad=False):
+  print("test: combineDeformationFields()")
+  xDef = torch.empty(defField0.shape, device=defField0.device, requires_grad=requiresGrad)
+  for chanIdx in range(-1, (defField0.shape[1]/3) - 1):
+    chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+    for channel in chanRange:
+      imgToDef = defField1[:, None, channel, ]                
+      deformedTmp = Utils.deformWithNearestNeighborInterpolation(imgToDef, defField0[: , chanRange, ], defField0.device)#Utils.deformImage(imgToDef, x[: , chanRange, ], x.device, True, False)
+      xDef[:, channel, ] = deformedTmp[:, 0, ]
+  defField0 = defField0.add(xDef)
+  return defField0

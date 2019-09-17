@@ -26,6 +26,11 @@ cycleW = 0.01
 lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
 
+# only for training the network
+validationIntervall=5
+modelOuptputPath="/home/fechter/workspace/OneShotImageRegistration/savedModels"
+netMinPatchSize = patchSize[0]
+
 
 
 
