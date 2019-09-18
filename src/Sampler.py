@@ -90,7 +90,9 @@ class Sampler(object):
     return (imgDataToWork, labelDataToWork)  
   
   def getIndicesForRandomization(self):
-    maskChanSumCrop = self.maskChanSum[:, 0:self.maxIdxs[0], 0:self.maxIdxs[1], 0:self.maxIdxs[2]]
+    #we look in the middle of the patch whether it is zero or not, therefore we add half of the patchsize; helpful with high downsampling when patchsize is bigger than image
+    maskChanSumCrop = self.maskChanSum[:, 0+self.patchSizes[0]/2:self.maxIdxs[0]+self.patchSizes[0]/2, 
+                                       0+self.patchSizes[1]/2:self.maxIdxs[1]+self.patchSizes[1]/2, 0+self.patchSizes[2]/2:self.maxIdxs[2]+self.patchSizes[2]/2]
     idxs = np.where(maskChanSumCrop > 0)
   
     return idxs
@@ -106,7 +108,7 @@ class Sampler(object):
         for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
           if (self.maskChanSum[:,patchIdx0+offset:patchIdx0 + self.patchSizes[0] - offset,
                                 patchIdx1+offset:patchIdx1 + self.patchSizes[1] - offset,
-                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].median() > 0):
+                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].contiguous().median() > 0):
             idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
     return idxs
 

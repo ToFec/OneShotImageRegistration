@@ -41,20 +41,24 @@ def plotImageData(imageData, blockFig=False):
 def main(argv):
   
   try:
-    opts, args = getopt.getopt(argv, '', ['csvFile='])
+    opts, args = getopt.getopt(argv, 'f:d:', ['csvFile=', 'dataIdx='])
   except getopt.GetoptError as e:
     print(e)
     return
-    
-  for opt, arg in opts:
-    if opt == '--csvFile':
-      csvFile = arg
-
-  df = pd.read_csv(csvFile, sep=';', header=None)
   
-  plt.scatter(range(0,len(df[0])),df[0], c=df[1])
-  plt.plot(range(0,len(df[0])),df[0])
+  dataIdx = 1  
+  for opt, arg in opts:
+    if opt in ('-f', '--csvFile'):
+      csvFile = arg
+    if opt in ('-d', '--dataIdx'):
+      dataIdx = int(arg)      
+
+  df = pd.read_csv(csvFile, sep=';', index_col=False)
+  
+  plt.scatter(range(0,len(df[df.columns[dataIdx]])),df[df.columns[dataIdx]], c=df[df.columns[0]])
+  plt.plot(range(0,len(df[df.columns[dataIdx]])),df[df.columns[dataIdx]])
   plt.grid()
+  plt.ylabel(df.columns[dataIdx])
   plt.show()
 
   

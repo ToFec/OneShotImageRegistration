@@ -151,13 +151,11 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,2,] += tmpField 
             
             
-  def optimizeNetTrain(self, imgDataToWork, labelToWork, lastDefField, idx,itIdx=0):
+  def optimizeNetTrain(self, imgDataToWork, itIdx=0):
     self.optimizer.zero_grad()
     defFields = self.net(imgDataToWork)
     
-    addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
-    
-    loss = self.calculateLoss(imgDataToWork, addedField, itIdx, idx)    
+    loss = self.calculateLoss(imgDataToWork, defFields, itIdx, (0,0,0, defFields.shape[2],defFields.shape[3],defFields.shape[4]))    
     torch.cuda.empty_cache()
     loss.backward()
     self.optimizer.step()

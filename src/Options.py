@@ -1,7 +1,7 @@
 import torch
 useContext = True
 
-numberOfEpochs = 1000
+numberOfEpochs = 100#1000
 usePaddedNet=True
 
 trainingFileNamesCSV=''
@@ -27,8 +27,7 @@ lossTollerances=(0.00001,)
 useMedianForSampling = (False,False,True)
 
 # only for training the network
-validationIntervall=5
-modelOuptputPath="/home/fechter/workspace/OneShotImageRegistration/savedModels"
+validationIntervall=10
 netMinPatchSize = patchSize[0]
 
 
