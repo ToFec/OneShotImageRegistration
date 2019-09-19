@@ -22,7 +22,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'validationFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -32,6 +32,7 @@ def main(argv):
     print(callString)
     return
 
+  oldModelList = None
   for opt, arg in opts:
     if opt == '--trainingFiles':
       userOpts.trainingFileNamesCSV = arg
@@ -51,7 +52,9 @@ def main(argv):
       userOpts.cycleW = float(arg)
     elif opt == '--smoothW':
       stringList = arg.split()
-      userOpts.smoothW = [float(i) for i in stringList]  
+      userOpts.smoothW = [float(i) for i in stringList]
+    elif opt == '--previousModels':
+      oldModelList = arg.split()        
       
   torch.manual_seed(0)
   np.random.seed(0)
@@ -75,6 +78,8 @@ def main(argv):
   with Optimize(net, userOpts) as trainTestOptimize:
     print(net)
     start = time.time()
+    if oldModelList is not None:
+      trainTestOptimize.setOldModels(oldModelList)
     if False:#userOpts.device == "cpu":
       net.share_memory()
       processes = []

@@ -1,4 +1,4 @@
-import torch
+import torch as torch
 import torch.optim as optim
 
 import numpy as np
@@ -6,14 +6,13 @@ import copy
 from Utils import getDefField, deformImage, deformWholeImage, getReceptiveFieldOffset, sampleImgData, getPaddedData, sampleImg
 import SimpleITK as sitk
 
-import LossFunctions as lf
-from torch.utils.data import dataloader
 from eval.LandmarkHandler import PointProcessor, PointReader
 import NetOptimizer
 from Sampler import Sampler
 
 import time
 import os
+from __builtin__ import False
 
 
 class Optimize():
@@ -31,6 +30,7 @@ class Optimize():
     if hasattr(userOpts, 'validationFileNameCSV'):
       validationLogfileName = self.userOpts.outputPath + os.path.sep + 'lossLogValidation.csv'
       self.validationLogFile = open(validationLogfileName,'w')
+      self.resultModels=[]
     
   def __enter__(self):
         return self
@@ -200,132 +200,148 @@ class Optimize():
       print(total_norm, maxNorm, maxVal)
 #       print(dataMean)
   
-  def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
+  def validateModel(self, validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift):
+    with torch.no_grad():
+      self.net.eval()
+      useContext = self.userOpts.useContext
+      self.userOpts.useContext = False
+      validationLosses = []
+      for _ , validationData in enumerate(validationDataLoader, 0):
+        if not self.userOpts.usePaddedNet:
+          validationData['image'], validationData['mask'], validationData['label'] = getPaddedData(validationData['image'], validationData['mask'], validationData['label'], padVals)
+        if len(self.resultModels) > 0:
+          currentState = copy.deepcopy(self.net.state_dict())
+          for modelIdx, previousModels in enumerate(self.resultModels):
+            self.applyModel(previousModels, validationData, modelIdx, samplerShift)
+          self.net.load_state_dict(currentState)
+          
+        currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
+        validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
+        validationLosses.append(float(validationLoss.detach()))
+      
+      del validationData, currValidationField
+      
+      self.userOpts.useContext = useContext 
+      return validationLosses
+  
+  def applyModel(self, modelToApply, data, previousSampleIdxs, samplerShift):
+    self.net.load_state_dict(modelToApply['model_state'])
+    defField = self.getDeformationField(data, modelToApply['samplingRate'], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
+    data['image'] = deformWholeImage(data['image'].to(self.userOpts.device), defField)
+    if (data['mask'].dim() == data['image'].dim()):
+      data['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True)
+    if (data['label'].dim() == data['image'].dim()):
+      data['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True)    
+  
+  def trainModel(self, samplingRate, samplingRateIdx, dataloader, validationDataLoader):
     self.net.train()
-    if self.userOpts.trainTillConvergence:
-      iterationValidation = self.terminateLoopByLossAndItCount
-    else:
-      iterationValidation = self.terminateLoopByItCount
-    numberOfEpochs = self.userOpts.numberOfEpochs
+    optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+    netOptim = NetOptimizer.NetOptimizer(self.net, None, optimizer, self.userOpts)
+    
     receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
     padVals = (receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset, receptiveFieldOffset)
     samplerShift = (0,0,0)
     if not self.userOpts.usePaddedNet:
       samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
-    samplingRates = self.getDownSampleRates()
     
-    resultModels = []
-    for samplingRateIdx, samplingRate in enumerate(samplingRates):
-      torch.manual_seed(0)
-      torch.cuda.manual_seed(0)
-      np.random.seed(0)
-      self.net.reset_params()
-      optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
-      netOptim = NetOptimizer.NetOptimizer(self.net, None, optimizer, self.userOpts)
-      for epoch in range(numberOfEpochs):
-        for i, data in enumerate(dataloader, 0):
-          netOptim.setSpacing(dataloader.dataset.getSpacingXZFlip(i))
-          if not self.userOpts.usePaddedNet:
-            data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
-            
-          if samplingRateIdx > 0:
-            currentState = copy.deepcopy(self.net.state_dict())
-            with torch.no_grad():
-              self.net.eval()
-              useContext = self.userOpts.useContext
-              self.userOpts.useContext = False
-              for previousSampleIdxs in range(samplingRateIdx):
-                modelToApply = resultModels[previousSampleIdxs]
-                self.net.load_state_dict(modelToApply)
-                defField = self.getDeformationField(data, samplingRates[previousSampleIdxs], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
-                data['image'] = deformWholeImage(data['image'].to(self.userOpts.device), defField)
-                if (data['mask'].dim() == data['image'].dim()):
-                  data['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True)
-                if (data['label'].dim() == data['image'].dim()):
-                  data['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True)
-              self.userOpts.useContext = useContext
-              self.net.load_state_dict(currentState)
-              self.net.train()
+    for epoch in range(self.userOpts.numberOfEpochs):
+      for i, data in enumerate(dataloader, 0):
+        netOptim.setSpacing(dataloader.dataset.getSpacingXZFlip(i))
+        if not self.userOpts.usePaddedNet:
+          data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
           
-          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
-          
-          del data
-          
-          sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
-          numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[0] * self.userOpts.patchSize[1] * self.userOpts.patchSize[2]))
-          if numberofSamplesPerRun < 1:
-            numberofSamplesPerRun = 1
-#TODO implement random samples with same size           
-          idxs = sampler.getIndicesForRandomization()
-          (imgDataToWork, _) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs)
-          imgDataToWork = imgDataToWork.to(self.userOpts.device)
-          for sample in range(numberofSamplesPerRun):
-            loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...], samplingRateIdx)
-            detachLoss = loss.detach()                
-            self.logFile.write(str(epoch) + ';' + str(float(detachLoss)) + '\n')
-            self.logFile.flush()
-            
-          del imgDataToWork, sampledImgData, sampledMaskData, sampledLabelData 
-        
-        
-        ##
-        ## Validation
-        ##
-        if epoch % self.userOpts.validationIntervall == 0:
-          torch.save({
-            'epoch': epoch,
-            'model_state_dict': self.net.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': loss,
-            'samplingRate': samplingRate
-            }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
-          
+        if len(self.resultModels) > 0:
+          currentState = copy.deepcopy(self.net.state_dict())
           with torch.no_grad():
             self.net.eval()
             useContext = self.userOpts.useContext
             self.userOpts.useContext = False
-            validationLosses = []
-            for vi, validationData in enumerate(validationDataLoader, 0):
-              if not self.userOpts.usePaddedNet:
-                validationData['image'], validationData['mask'], validationData['label'] = getPaddedData(validationData['image'], validationData['mask'], validationData['label'], padVals)
-              if len(resultModels) > 0:
-                currentState = copy.deepcopy(self.net.state_dict())
-                for modelIdx, previousModels in enumerate(resultModels):
-                  self.net.load_state_dict(previousModels)
-                  currValidationField = self.getDeformationField(validationData, samplingRates[modelIdx], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
-                  validationData['image'] = deformWholeImage(validationData['image'].to(self.userOpts.device), currValidationField)
-                  if (validationData['mask'].dim() == validationData['image'].dim()):
-                    validationData['mask'] = deformWholeImage(validationData['mask'].to(self.userOpts.device), currValidationField,True)
-                  if (validationData['label'].dim() == validationData['image'].dim()):
-                    validationData['label'] = deformWholeImage(validationData['label'].to(self.userOpts.device), currValidationField,True)
-                self.net.load_state_dict(currentState)
-                
-              currValidationField = self.getDeformationField(validationData, samplingRates[samplingRateIdx], self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
-              validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
-              validationLosses.append(float(validationLoss.detach()))
-            self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + '\n')
-            self.validationLogFile.flush()
-            
-            del validationData, validationLosses, currValidationField
-            
-            self.net.train()
+            for previousSampleIdxs in range(samplingRateIdx):
+              modelToApply = self.resultModels[previousSampleIdxs]
+              self.applyModel(modelToApply, data, previousSampleIdxs, samplerShift)
             self.userOpts.useContext = useContext
+            self.net.load_state_dict(currentState)
+            self.net.train()
         
-      resultModels.append(copy.deepcopy(self.net.state_dict()))
-      torch.save({
-        'epoch': epoch,
-        'model_state_dict': self.net.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'loss': loss,
-        'samplingRate': samplingRate
-        }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
+        sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+        
+        sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
+        numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[0] * self.userOpts.patchSize[1] * self.userOpts.patchSize[2]))
+        if numberofSamplesPerRun < 1:
+          numberofSamplesPerRun = 1
+        idxs = sampler.getIndicesForRandomization()
+        (imgDataToWork, _) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs)
+        imgDataToWork = imgDataToWork.to(self.userOpts.device)
+        for sample in range(numberofSamplesPerRun):
+          loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...], samplingRateIdx)
+          detachLoss = loss.detach()                
+          self.logFile.write(str(epoch) + ';' + str(float(detachLoss)) + '\n')
+          self.logFile.flush()
+          
+        del imgDataToWork, sampledImgData, sampledMaskData, sampledLabelData 
+      
+      
+      ##
+      ## Validation
+      ##
+      if epoch % self.userOpts.validationIntervall == 0:
+        torch.save({
+              'epoch': epoch,
+              'model_state_dict': self.net.state_dict(),
+              'optimizer_state_dict': optimizer.state_dict(),
+              'loss': loss,
+              'samplingRate': samplingRate
+              }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
+        validationLosses = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
+        self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + '\n')
+        self.validationLogFile.flush()
+        del validationLosses
+        self.net.train() 
+  
+  def setOldModels(self, oldModelList):
+    for modelPath in oldModelList:
+      modelDict = torch.load(modelPath)
+      self.resultModels.append({'samplingRate': modelDict['samplingRate'], 'model_state': modelDict['model_state_dict']})
+  
+  def resetNet(self):
+    torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
+    np.random.seed(0)
+    self.net.reset_params()
+  
+  def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
+    samplingRates = self.getDownSampleRates()
+    
+    for samplingRateIdx, samplingRate in enumerate(samplingRates):
+      if len(self.resultModels) > samplingRateIdx:
+        if self.userOpts.fineTuneOldModel[samplingRateIdx]:
+          resultModelsBUP = self.resultModels
+          self.resultModels = self.resultModels[0:samplingRateIdx]
+          self.net.load_state_dict(resultModelsBUP[samplingRateIdx]['model_state'])
+          self.trainModel(samplingRate, dataloader, validationDataLoader)
+          self.resultModels = resultModelsBUP
+          self.resultModels[samplingRateIdx] = {'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())}
+          torch.save({
+          'model_state_dict': self.net.state_dict(),
+          'samplingRate': samplingRate
+          }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
+        else:
+          continue
+      else:
+        self.resetNet()
+        self.trainModel(samplingRate, dataloader, validationDataLoader)
+        self.resultModels.append({'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())})
+        torch.save({
+          'model_state_dict': self.net.state_dict(),
+          'samplingRate': samplingRate
+          }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
      
   def getDeformationField(self, imageData, samplingRate, patchSize, useMedianSampling, samplerShift):
     sampledValidationImgData, sampledValidationMaskData, sampledValidationLabelData, _ = sampleImgData(imageData, samplingRate)
     validationSampler = Sampler(sampledValidationMaskData, sampledValidationImgData, sampledValidationLabelData, patchSize) 
     idxs = validationSampler.getIndicesForOneShotSampling(samplerShift, useMedianSampling)
     currValidationField = torch.zeros((sampledValidationImgData.shape[0], sampledValidationImgData.shape[1] * 3, sampledValidationImgData.shape[2], sampledValidationImgData.shape[3], sampledValidationImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
-    for patchIdx, idx in enumerate(idxs):
+    for _ , idx in enumerate(idxs):
       validationImageSample = validationSampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
       validationImageSample = validationImageSample.to(self.userOpts.device)
       defField = self.net(validationImageSample)

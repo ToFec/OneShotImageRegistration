@@ -29,6 +29,7 @@ useMedianForSampling = (False,False,True)
 # only for training the network
 validationIntervall=10
 netMinPatchSize = patchSize[0]
+fineTuneOldModel=(False, False, False) # works only in combination with "previousModels" parameter
 
 
 
