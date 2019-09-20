@@ -79,7 +79,7 @@ def getZeroIdxField(imagShape, device):
 
 def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
   if useropts.useContext:
-    if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape):
+    if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape) or Context.imgDataDef[imgIdx].dtype != dataType:
       imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
       Context.imgDataDef[imgIdx] = imgDataDef
     else:

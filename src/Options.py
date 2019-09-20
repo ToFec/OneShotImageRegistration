@@ -1,7 +1,7 @@
 import torch
 useContext = True
 
-numberOfEpochs = 100#1000
+numberOfEpochs = [100,100,100]#1000
 usePaddedNet=True
 
 trainingFileNamesCSV=''

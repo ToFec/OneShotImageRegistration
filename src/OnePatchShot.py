@@ -22,7 +22,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -33,6 +33,7 @@ def main(argv):
     return
 
   oldModelList = None
+  testModels = False
   for opt, arg in opts:
     if opt == '--trainingFiles':
       userOpts.trainingFileNamesCSV = arg
@@ -54,7 +55,10 @@ def main(argv):
       stringList = arg.split()
       userOpts.smoothW = [float(i) for i in stringList]
     elif opt == '--previousModels':
-      oldModelList = arg.split()        
+      oldModelList = arg.split()
+    elif opt == '--testModels':
+      testModels = True        
+              
       
   torch.manual_seed(0)
   np.random.seed(0)
@@ -85,7 +89,9 @@ def main(argv):
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        if hasattr(userOpts, 'validationFileNameCSV'):
+        if testModels:
+          p = mp.Process(target=trainTestOptimize.testNetDownSamplePatch, args=(dataloader))
+        elif hasattr(userOpts, 'validationFileNameCSV'):
           p = mp.Process(target=trainTestOptimize.trainNetDownSamplePatch, args=(dataloader, validationDataLoader))
         else:
           p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
@@ -95,7 +101,9 @@ def main(argv):
         p.join()
           
     else:
-      if hasattr(userOpts, 'validationFileNameCSV'):
+      if testModels:
+        trainTestOptimize.testNetDownSamplePatch(dataloader)
+      elif hasattr(userOpts, 'validationFileNameCSV'):
         trainTestOptimize.trainNetDownSamplePatch(dataloader, validationDataLoader)
       else:
         trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
