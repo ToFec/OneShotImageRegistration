@@ -151,9 +151,10 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,2,] += tmpField 
             
             
-  def optimizeNetTrain(self, imgDataToWork, itIdx=0):
+  def optimizeNetTrain(self, imgDataToWork, groundTruthData, itIdx=0):
     self.optimizer.zero_grad()
-    defFields = self.net(imgDataToWork)
+    netInput = torch.cat([imgDataToWork, groundTruthData], dim=1)
+    defFields = self.net(netInput)
     
     loss = self.calculateLoss(imgDataToWork, defFields, itIdx, (0,0,0, defFields.shape[2],defFields.shape[3],defFields.shape[4]))    
     torch.cuda.empty_cache()
@@ -195,13 +196,19 @@ class NetOptimizer(object):
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
     return loss    
             
-  def optimizeNetOneShot(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
+  def optimizeNetOneShot(self, imgDataToWork, groundTruthData, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
-     
-    defFields = self.net(imgDataToWork)
+    
+    netInput = torch.cat([imgDataToWork, groundTruthData], dim=1) 
+    defFields = self.net(netInput)
+    
+    tmpZeroField = torch.zeros_like(lastDefField)
+    tmpZeroField = tmpZeroField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    
+    tmpZeroField = Utils.combineDeformationFields(tmpZeroField, lastDefField, True) 
       
-    addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    addedField = tmpZeroField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]
       
     currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = addedField.detach()
 

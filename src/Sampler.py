@@ -16,9 +16,12 @@ class Sampler(object):
     self.maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
     self.patchSizes = getPatchSize(imgData.shape, imgPatchSize)
 
-  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, normImgPatch=False):
+  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, normImgPatch=False, otherSample=None):
    
     imgDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
+    if otherSample is not None:
+      otherSampleNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
+      
     if (self.labelData.dim() == self.imgData.dim()):
       labelDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
     
@@ -32,6 +35,11 @@ class Sampler(object):
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
       imgDataNew[j, ] = imgPatch
+      if otherSample is not None:
+        otherPatch = otherSample[idx0, : , idx2:idx2 + self.patchSizes[0], idx3:idx3 + self.patchSizes[1], idx4:idx4 + self.patchSizes[2]]
+        if normImgPatch:
+          otherPatch = normalizeImg(otherPatch)
+        otherSampleNew[j, ] = otherPatch
   #     indexArrayTest[idx2:idx2 + patchSizes[0], idx3:idx3 + patchSizes[1], idx4:idx4 + patchSizes[2]] += 1
       if (self.labelData.dim() == self.imgData.dim()):
         labelDataNew[j, ] = self.labelData[idx0, : , idx2:idx2 + self.patchSizes[0], idx3:idx3 + self.patchSizes[1], idx4:idx4 + self.patchSizes[2]]
@@ -41,8 +49,12 @@ class Sampler(object):
       labelDataToWork = labelDataNew
     else:
       labelDataToWork = torch.Tensor();
-      
-    return (imgDataToWork, labelDataToWork)    
+    
+    if otherSample is not None:
+      return (imgDataToWork, labelDataToWork, otherSampleNew)
+    else:
+      return (imgDataToWork, labelDataToWork)
+        
   
   def getSubSample(self, idx, normImgPatch):
       imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
@@ -53,8 +65,11 @@ class Sampler(object):
         labelData = self.labelData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
       return (imgPatch, labelData)
     
-  def getSubSampleImg(self, idx, normImgPatch):
-      imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
+  def getSubSampleImg(self, idx, normImgPatch, otherImg = None):
+      if otherImg is None:
+        imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
+      else:
+        imgPatch = otherImg[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
       return imgPatch    

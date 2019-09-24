@@ -1,9 +1,9 @@
-import torch as torch
+import torch
 import torch.optim as optim
 
 import numpy as np
 import copy
-from Utils import getDefField, deformImage, deformWholeImage, getReceptiveFieldOffset, sampleImgData, getPaddedData, sampleImg
+from Utils import getDefField, deformImage, deformWholeImage, getReceptiveFieldOffset, sampleImgData, getPaddedData, sampleImg, combineDeformationFields
 import SimpleITK as sitk
 
 from eval.LandmarkHandler import PointProcessor, PointReader
@@ -97,8 +97,20 @@ class Optimize():
           
           deformedPoints = pp.deformPointsWithField(currLandmarks, defField, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
           pr.saveDataTensor(self.userOpts.outputPath + os.path.sep + 'dataset' + str(datasetIdx) + 'channel' + str(chanIdx+1) + '0deformed.pts', deformedPoints)
+  
+  def saveDefField(self, defFields, dataloader, datasetIdx, outputName='deformationFieldDataset'):
+    dataSetSpacing = dataloader.dataset.getSpacing(datasetIdx)
+    dataSetDirCosines = dataloader.dataset.getDirectionCosines(datasetIdx)
+    for imgIdx in range(defFields.shape[0]):
+      for chanIdx in range(-1, (defFields.shape[1]/3) - 1):
+        defX = defFields[imgIdx, chanIdx * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+        defY = defFields[imgIdx, chanIdx * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+        defZ = defFields[imgIdx, chanIdx * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
+        defField = getDefField(defX, defY, defZ)
+        defDataToSave = sitk.GetImageFromArray(defField, isVector=True)
+        dataloader.dataset.saveData(defDataToSave, self.userOpts.outputPath, outputName + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
           
-  def saveDeformedData(self, data, dataloader, datasetIdx):
+  def saveDeformedData(self, data, dataloader, datasetIdx, imgName='imgDataset'):
     imgData = data['image']
     labelData = data['label']
     landmarkData = data['landmarks']
@@ -114,7 +126,7 @@ class Optimize():
           dataloader.dataset.saveData(labelDataOrig, self.userOpts.outputPath, 'labelDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         
         imgDataOrig = sitk.GetImageFromArray(imgToDef[0,0, ])
-        dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, 'imgDataset' + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
+        dataloader.dataset.saveData(imgDataOrig, self.userOpts.outputPath, imgName + str(datasetIdx) + 'image' + str(imgIdx) + 'channel' + str(chanIdx) + '.nrrd', datasetIdx, False)
         
         if (len(landmarkData) > 0):
           currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
@@ -228,45 +240,76 @@ class Optimize():
       useContext = self.userOpts.useContext
       self.userOpts.useContext = False
       validationLosses = []
+      landmarkDistances = []
+      pp = PointProcessor()
       for validationDataIdx , validationData in enumerate(validationDataLoader, 0):
         if not self.userOpts.usePaddedNet:
           validationData['image'], validationData['mask'], validationData['label'] = getPaddedData(validationData['image'], validationData['mask'], validationData['label'], padVals)
+        dataBeforeDeformation = validationData
         if len(self.resultModels) > 0:
           currentState = copy.deepcopy(self.net.state_dict())
           for modelIdx, previousModels in enumerate(self.resultModels):
-            validationData = self.applyModel(previousModels, validationData, modelIdx, samplerShift, validationDataIdx, validationDataLoader.dataset)
+            validationData, _ = self.applyModel(previousModels, validationData, dataBeforeDeformation, modelIdx, samplerShift, validationDataIdx, validationDataLoader.dataset)
           self.net.load_state_dict(currentState)
-          
-        currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
+        currValidationField = self.getDeformationField(validationData,dataBeforeDeformation, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
         validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
+        
+        if len(dataBeforeDeformation['landmarks']) > 0:
+          validationData['landmarks'] = self.deformLandmarks(validationData['landmarks'], validationData['image'], currValidationField, validationDataLoader.dataset.getSpacing(validationDataIdx),
+                                validationDataLoader.dataset.getOrigin(validationDataIdx), 
+                                validationDataLoader.dataset.getDirectionCosines(validationDataIdx))
+          totalMeanPointDist = 0.0
+          for landmarkChannel in range(-1, len(dataBeforeDeformation['landmarks']) - 1):
+            meanPointDistance, _ = pp.calculatePointSetDistance(dataBeforeDeformation['landmarks'][landmarkChannel+1], validationData['landmarks'][landmarkChannel], False)
+            totalMeanPointDist += meanPointDistance
+          landmarkDistances.append(totalMeanPointDist / float(len(dataBeforeDeformation['landmarks'])))
         validationLosses.append(float(validationLoss.detach()))
-      
+
       del validationData, currValidationField
       
       self.userOpts.useContext = useContext 
-      return validationLosses
+      return validationLosses, landmarkDistances
     
-  def applyModel(self, modelToApply, data, previousSampleIdxs, samplerShift, datasetIdx, dataset):
+  def applyModel(self, modelToApply, data, gtData, previousSampleIdxs, samplerShift, datasetIdx, dataset):
     self.net.load_state_dict(modelToApply['model_state'])
-    defField = self.getDeformationField(data, modelToApply['samplingRate'], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
-    deformedData = {'image': deformWholeImage(data['image'].to(self.userOpts.device), defField)}
+    defField = self.getDeformationField(data, gtData, modelToApply['samplingRate'], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
+    deformedData = {'image': deformWholeImage(data['image'].to(self.userOpts.device), defField, channelOffset = 0)}
     if (data['mask'].dim() == data['image'].dim()):
-      deformedData['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True)
+      deformedData['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True, channelOffset = 0)
     else:
       deformedData['mask'] = torch.tensor([1])
     if (data['label'].dim() == data['image'].dim()):
-      deformedData['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True)
+      deformedData['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True, channelOffset = 0)
     else:
       deformedData['label'] = torch.tensor([1])      
       
-    landmarkData = data['landmarks']
+    deformedData['landmarks'] = self.deformLandmarks(data['landmarks'], data['image'], defField, dataset.getSpacing(datasetIdx), dataset.getOrigin(datasetIdx), dataset.getDirectionCosines(datasetIdx))
+    
+    return deformedData, defField
+  
+  def applyDefField(self, defField, data, datasetIdx, dataset):
+    deformedData = {'image': deformWholeImage(data['image'].to(self.userOpts.device), defField, channelOffset = 0)}
+    if (data['mask'].dim() == data['image'].dim()):
+      deformedData['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True, channelOffset = 0)
+    else:
+      deformedData['mask'] = torch.tensor([1])
+    if (data['label'].dim() == data['image'].dim()):
+      deformedData['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True, channelOffset = 0)
+    else:
+      deformedData['label'] = torch.tensor([1])      
+      
+    deformedData['landmarks'] = self.deformLandmarks(data['landmarks'], data['image'], defField, dataset.getSpacing(datasetIdx), dataset.getOrigin(datasetIdx), dataset.getDirectionCosines(datasetIdx))
+    
+    return deformedData  
+  
+  def deformLandmarks(self, landmarkData, image, defField, spacing, origin, cosines):
     if (len(landmarkData) > 0):
       pp = PointProcessor()
-      deformedlandmarkData = list(data['landmarks'])
-      for imgIdx in range(data['image'].shape[0]):
-        for chanIdx in range(-1, data['image'].shape[1] - 1):
-          dataSetSpacing = dataset.getSpacing(datasetIdx)
-          dataSetDirCosines = dataset.getDirectionCosines(datasetIdx)
+      deformedlandmarkData = list(landmarkData)
+      for imgIdx in range(image.shape[0]):
+        for chanIdx in range(-1, image.shape[1] - 1):
+          dataSetSpacing = spacing
+          dataSetDirCosines = cosines
           defX = defField[imgIdx, chanIdx * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
           defY = defField[imgIdx, chanIdx * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
           defZ = defField[imgIdx, chanIdx * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
@@ -275,13 +318,13 @@ class Optimize():
           defFieldPerturbated = np.moveaxis(defFieldPerturbated, 0, 1)
           defFieldPerturbated = torch.from_numpy(defFieldPerturbated)
           currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
-          defFieldOrigin = dataset.getOrigin(datasetIdx)
+          defFieldOrigin = origin
           deformedPoints = pp.deformPointsWithField(currLandmarks, defFieldPerturbated, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
           deformedlandmarkData[chanIdx + 1]=deformedPoints
-      deformedData['landmarks']=deformedlandmarkData
+      deformedData=deformedlandmarkData
     else:
-      deformedData['landmarks']=[]
-    return deformedData
+      deformedData=[]   
+    return deformedData 
   
   def trainModel(self, samplingRate, samplingRateIdx, dataloader, validationDataLoader):
     self.net.train()
@@ -299,7 +342,8 @@ class Optimize():
         netOptim.setSpacing(dataloader.dataset.getSpacingXZFlip(i))
         if not self.userOpts.usePaddedNet:
           data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], padVals)
-          
+        
+        groundTruthData = data  
         if len(self.resultModels) > 0:
           currentState = copy.deepcopy(self.net.state_dict())
           with torch.no_grad():
@@ -308,22 +352,23 @@ class Optimize():
             self.userOpts.useContext = False
             for previousSampleIdxs in range(samplingRateIdx):
               modelToApply = self.resultModels[previousSampleIdxs]
-              data = self.applyModel(modelToApply, data, previousSampleIdxs, samplerShift, i, dataloader.dataset)
+              data, _ = self.applyModel(modelToApply, data,groundTruthData, previousSampleIdxs, samplerShift, i, dataloader.dataset)
             self.userOpts.useContext = useContext
             self.net.load_state_dict(currentState)
             self.net.train()
         
         sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
-        
+        sampledGTData, _,_,_ = sampleImgData(groundTruthData, samplingRate)
         sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
         numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[0] * self.userOpts.patchSize[1] * self.userOpts.patchSize[2]))
         if numberofSamplesPerRun < 1:
           numberofSamplesPerRun = 1
         idxs = sampler.getIndicesForRandomization()
-        (imgDataToWork, _) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs)
+        (imgDataToWork, _, gtToWork) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs,otherSample=sampledGTData)
         imgDataToWork = imgDataToWork.to(self.userOpts.device)
+        gtToWork = gtToWork.to(self.userOpts.device)
         for sample in range(numberofSamplesPerRun):
-          loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...], samplingRateIdx)
+          loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...],gtToWork[sample, None, ...], samplingRateIdx)
           detachLoss = loss.detach()                
           self.logFile.write(str(epoch) + ';' + str(float(detachLoss)) + '\n')
           self.logFile.flush()
@@ -342,8 +387,11 @@ class Optimize():
               'loss': loss,
               'samplingRate': samplingRate
               }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
-        validationLosses = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
-        self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + '\n')
+        validationLosses, landmarkDistances = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
+        if len(landmarkDistances) > 0:
+          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses[0])) + ';' + str(np.std(validationLosses)) + ';' + str(np.mean(landmarkDistances)) + '\n')
+        else:
+          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses[0])) + ';' + str(np.std(validationLosses)) + ';' + '0.0' + '\n')
         self.validationLogFile.flush()
         del validationLosses
         self.net.train() 
@@ -366,13 +414,31 @@ class Optimize():
       samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
     with torch.no_grad():
       self.net.eval()
+      useContext = self.userOpts.useContext
+      self.userOpts.useContext = False
       for datasetIdx , data in enumerate(dataloader, 0):
         if not self.userOpts.usePaddedNet:
           data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], data)
         if len(self.resultModels) > 0:
+          pp = PointProcessor()
+          dataBeforeDeformation = data
+          
+          lastField = None
           for modelIdx, previousModels in enumerate(self.resultModels):
-            data = self.applyModel(previousModels, data, modelIdx, samplerShift, datasetIdx, dataloader.dataset)
+            data, deformationField = self.applyModel(previousModels, data, dataBeforeDeformation, modelIdx, samplerShift, datasetIdx, dataloader.dataset)
+            self.saveDefField(deformationField, dataloader, datasetIdx, 'tmpField'+str(modelIdx))
+            self.saveDeformedData(data, dataloader, datasetIdx, 'tmpDataset'+str(modelIdx))
+            if lastField is None:
+              lastField = deformationField
+            else:
+              lastField = combineDeformationFields(deformationField, lastField)
+          self.saveDefField(lastField, dataloader, datasetIdx)
           self.saveDeformedData(data, dataloader, datasetIdx)
+          for landmarkChannel in range(-1, len(dataBeforeDeformation['landmarks']) - 1):
+            meanPointDistance, _ = pp.calculatePointSetDistance(dataBeforeDeformation['landmarks'][landmarkChannel+1], data['landmarks'][landmarkChannel], False)
+            print(meanPointDistance)
+         
+      self.userOpts.useContext = useContext
             
     
   def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
@@ -402,15 +468,19 @@ class Optimize():
           'samplingRate': samplingRate
           }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
      
-  def getDeformationField(self, imageData, samplingRate, patchSize, useMedianSampling, samplerShift):
+  def getDeformationField(self, imageData, groundTruthData, samplingRate, patchSize, useMedianSampling, samplerShift):
     sampledValidationImgData, sampledValidationMaskData, sampledValidationLabelData, _ = sampleImgData(imageData, samplingRate)
+    sampledGTImgData, _, _, _ = sampleImgData(groundTruthData, samplingRate)
     validationSampler = Sampler(sampledValidationMaskData, sampledValidationImgData, sampledValidationLabelData, patchSize) 
     idxs = validationSampler.getIndicesForOneShotSampling(samplerShift, useMedianSampling)
     currValidationField = torch.zeros((sampledValidationImgData.shape[0], sampledValidationImgData.shape[1] * 3, sampledValidationImgData.shape[2], sampledValidationImgData.shape[3], sampledValidationImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
     for _ , idx in enumerate(idxs):
       validationImageSample = validationSampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-      validationImageSample = validationImageSample.to(self.userOpts.device)
-      defField = self.net(validationImageSample)
+      groundTruthSample = validationSampler.getSubSampleImg(idx, self.userOpts.normImgPatches, sampledGTImgData)
+      groundTruthSample = groundTruthSample.to(validationImageSample.device)
+      netInput = torch.cat([validationImageSample, groundTruthSample], dim=1)
+      netInput = netInput.to(self.userOpts.device)
+      defField = self.net(netInput)
       currValidationField[:, :, idx[0]:idx[0]+validationImageSample.shape[2], idx[1]:idx[1]+validationImageSample.shape[3], idx[2]:idx[2]+validationImageSample.shape[4]] = defField
       
     upSampleRate = 1.0 / samplingRate
@@ -419,6 +489,7 @@ class Optimize():
     return currValidationField
         
   def trainTestNetDownSamplePatch(self, dataloader):
+      print('TODO: test implementation of deforming images with current deformation field; and implement combination of deformation fields')
       if self.userOpts.trainTillConvergence:
         iterationValidation = self.terminateLoopByLossAndItCount
       else:
@@ -445,20 +516,30 @@ class Optimize():
           samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
         
         samplingRates = self.getDownSampleRates()
-        
+        groundTruthData = data
         self.net.train()
         currDefField = None
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           print('sampleRate: ', samplingRate)
          
-          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
+          sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(groundTruthData, samplingRate)
+          sampledGroundTruthImgData = sampledImgData
+          if currDefField is not None:
+            useContext = self.userOpts.useContext
+            self.userOpts.useContext = False
+            sampledImgData = deformWholeImage(sampledImgData.to(self.userOpts.device), currDefField, channelOffset = 0)
+            if (sampledMaskData.dim() != sampledImgData.dim()):
+              sampledMaskData = deformWholeImage(sampledMaskData.to(self.userOpts.device), currDefField, channelOffset = 0)
+            if (sampledLabelData.dim() != sampledImgData.dim()):
+              sampledLabelData = deformWholeImage(sampledLabelData.to(self.userOpts.device), currDefField, channelOffset = 0)
+            self.userOpts.useContext = useContext              
+          else:
+            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device="cpu", requires_grad=False)
+          
           sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
           idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
           
           print('idxs: ', idxs)
-          
-          if currDefField is None:
-            currDefField = torch.zeros((sampledImgData.shape[0], sampledImgData.shape[1] * 3, sampledImgData.shape[2], sampledImgData.shape[3], sampledImgData.shape[4]), device="cpu", requires_grad=False)
           
           for ltIdx , lossTollerance in enumerate(self.userOpts.lossTollerances):
             print('lossTollerance: ', lossTollerance)
@@ -473,6 +554,9 @@ class Optimize():
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
               imgDataToWork = imgDataToWork.to(self.userOpts.device)
               
+              groundTruthToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches, sampledGroundTruthImgData)
+              groundTruthToWork = groundTruthToWork.to(self.userOpts.device)
+              
               currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currDefField, idx)
               currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
               lastDeffieldGPU = lastDeffield[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
@@ -481,7 +565,7 @@ class Optimize():
               lossCounter = 0
               runningLoss = torch.ones(10, device=self.userOpts.device)
               while True:
-                loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
+                loss = netOptim.optimizeNetOneShot(imgDataToWork, groundTruthToWork, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx+ltIdx, printLossAndCropGrads)
                 if printLossAndCropGrads:
                   self.printParameterInfo()
                 detachLoss = loss.detach()                
@@ -511,9 +595,9 @@ class Optimize():
         end = time.time()
         print('Registration of dataset %i took:' % (i), end - start, 'seconds')
         if not self.userOpts.usePaddedNet:
-          data['image'] = data['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
+          groundTruthData['image'] = groundTruthData['image'][:,:,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset,receptiveFieldOffset:-receptiveFieldOffset]
         
         currDefField = currDefField.to(self.userOpts.device)
-        self.saveResults(data, currDefField, dataloader, i)                  
+        self.saveResults(groundTruthData, currDefField, dataloader, i)                  
 
 

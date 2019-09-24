@@ -27,7 +27,7 @@ class UNet(nn.Module):
     
     self.depth = depth
     for i in range(self.depth):
-      currentNumberOfInputChannels = self.in_channels if i == 0 else outputFilterNumber
+      currentNumberOfInputChannels = self.in_channels * 2 if i == 0 else outputFilterNumber
       outputFilterNumber = numberOfFiltersFirstLayer*(2**i)
       self.encoders.append( EncoderBrick(outputFilterNumber, currentNumberOfInputChannels, self.useBatchNorm, self.concatLayer, padImg) )
       if ( i < self.depth-1):
