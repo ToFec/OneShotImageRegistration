@@ -378,6 +378,7 @@ def save_grad(name):
 
   return hook
 
+# newField, oldField
 def combineDeformationFields(defField0, defField1, requiresGrad=False):
   xDef = torch.empty(defField0.shape, device=defField0.device, requires_grad=requiresGrad)
   for chanIdx in range(-1, (defField0.shape[1]/3) - 1):
@@ -385,7 +386,7 @@ def combineDeformationFields(defField0, defField1, requiresGrad=False):
     for channel in chanRange:
       imgToDef = defField1[:, None, channel, ]                
       #deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, defField0[: , chanRange, ], defField0.device)
-      deformedTmp = deformImage(imgToDef, defField0[: , chanRange, ], defField0.device)
+      deformedTmp = deformImage(imgToDef, defField0[: , chanRange, ], defField0.device, not requiresGrad)
       xDef[:, channel, ] = deformedTmp[:, 0, ]
   defField0 = defField0.add(xDef)
   return defField0

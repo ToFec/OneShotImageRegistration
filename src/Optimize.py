@@ -247,10 +247,10 @@ class Optimize():
         if not self.userOpts.usePaddedNet:
           validationData['image'], validationData['mask'], validationData['label'] = getPaddedData(validationData['image'], validationData['mask'], validationData['label'], padVals)
         dataBeforeDeformation = validationData
+        
+        lastField = None
         if len(self.resultModels) > 0:
-          
           currentState = copy.deepcopy(self.net.state_dict())
-          lastField = None
           for modelIdx, previousModels in enumerate(self.resultModels):
             self.net.load_state_dict(previousModels['model_state'])
             defField = self.getDeformationField(validationData, previousModels['samplingRate'], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
@@ -261,7 +261,8 @@ class Optimize():
           self.net.load_state_dict(currentState)
         
         currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
-        currValidationField = combineDeformationFields(currValidationField, lastField)
+        if lastField is not None:
+          currValidationField = combineDeformationFields(currValidationField, lastField)
         
         validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
         validationLosses.append(float(validationLoss.detach()))
