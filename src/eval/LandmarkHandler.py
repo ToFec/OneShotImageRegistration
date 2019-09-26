@@ -116,7 +116,7 @@ class PointProcessor():
       
     return distances, stds
 
-  def calculatePointSetDistance(self, points0, points1):
+  def calculatePointSetDistance(self, points0, points1, printToCmdLine = True):
     distances = []
     for idx in range(0,len(points0)):
       point0 = points0[idx]
@@ -128,7 +128,8 @@ class PointProcessor():
         distance += diff
       currDist = sqrt(distance)
       distances.append(currDist)
-      print(currDist)
+      if printToCmdLine:
+        print(currDist)
     meanDistance = np.mean(distances)
     std = np.std(distances)
     return meanDistance, std

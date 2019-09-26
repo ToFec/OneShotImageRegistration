@@ -23,11 +23,13 @@ class Sampler(object):
       labelDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
     
     randSampleIdxs = np.random.randint(0, len(idxs[0]), (numberofSamplesPerRun,))
+    usedIdx = []
     for j in range(0, numberofSamplesPerRun):
       idx0 = idxs[0][randSampleIdxs[j]]
       idx2 = idxs[1][randSampleIdxs[j]]
       idx3 = idxs[2][randSampleIdxs[j]]
       idx4 = idxs[3][randSampleIdxs[j]]
+      usedIdx.append((idx2, idx3, idx4, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]))
       imgPatch = self.imgData[idx0, : , idx2:idx2 + self.patchSizes[0], idx3:idx3 + self.patchSizes[1], idx4:idx4 + self.patchSizes[2]]
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
@@ -42,7 +44,7 @@ class Sampler(object):
     else:
       labelDataToWork = torch.Tensor();
       
-    return (imgDataToWork, labelDataToWork)    
+    return (imgDataToWork, labelDataToWork, usedIdx)    
   
   def getSubSample(self, idx, normImgPatch):
       imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]

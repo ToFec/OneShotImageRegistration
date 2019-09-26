@@ -262,7 +262,7 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   return deformed
   
 
-def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0):
+def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0, channelOffset = 1):
   imgDataDef = getImgDataDef(imgDataToWork.shape, imgDataToWork.device, imgDataToWork.dtype, imgIdx)
   for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
     imgToDef = imgDataToWork[:, None, chanIdx, ]
@@ -271,7 +271,7 @@ def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=
       deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], imgDataToWork.device)        
     else:
       deformedTmp = deformImage(imgToDef, addedField[: , chanRange, ], imgDataToWork.device, False)
-    imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
+    imgDataDef[:, chanIdx + channelOffset, ] = deformedTmp[:, 0, ]
   return imgDataDef
 
 def deformImage(imgToDef, defFields, device, detach=True):
@@ -378,15 +378,14 @@ def save_grad(name):
 
   return hook
 
-# TODO: TEST
 def combineDeformationFields(defField0, defField1, requiresGrad=False):
-  print("test: combineDeformationFields()")
   xDef = torch.empty(defField0.shape, device=defField0.device, requires_grad=requiresGrad)
   for chanIdx in range(-1, (defField0.shape[1]/3) - 1):
     chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
     for channel in chanRange:
       imgToDef = defField1[:, None, channel, ]                
-      deformedTmp = Utils.deformWithNearestNeighborInterpolation(imgToDef, defField0[: , chanRange, ], defField0.device)#Utils.deformImage(imgToDef, x[: , chanRange, ], x.device, True, False)
+      #deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, defField0[: , chanRange, ], defField0.device)
+      deformedTmp = deformImage(imgToDef, defField0[: , chanRange, ], defField0.device)
       xDef[:, channel, ] = deformedTmp[:, 0, ]
   defField0 = defField0.add(xDef)
   return defField0
