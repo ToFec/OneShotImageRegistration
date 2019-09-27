@@ -371,8 +371,8 @@ class Optimize():
               else:
                 lastField = combineDeformationFields(defField, lastField)
             self.userOpts.useContext = useContext
-            self.net.load_state_dict(currentState)
-            self.net.train()
+          self.net.load_state_dict(currentState)
+          self.net.train()
         
         
         sampledImgData, sampledMaskData, sampledLabelData, _ = sampleImgData(data, samplingRate)
@@ -385,28 +385,23 @@ class Optimize():
         currDefField = currDefField * samplingRate
         currDefField = sampleImg(currDefField, samplingRate)
         
-        sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx]) 
-        numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[0] * self.userOpts.patchSize[1] * self.userOpts.patchSize[2]))
-        if numberofSamplesPerRun < 1:
-          numberofSamplesPerRun = 1
-        idxs = sampler.getIndicesForRandomization()
-        (imgDataToWork, _, usedIdx) = sampler.getRandomSubSamples(numberofSamplesPerRun, idxs)
-        imgDataToWork = imgDataToWork.to(self.userOpts.device)
+        sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx])
+        idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
         lastDeffield = currDefField.clone()
-        for sample in range(numberofSamplesPerRun):
-          
-          currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currDefField, usedIdx[sample])
+        for _ , idx in enumerate(idxs):
+          imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+          imgDataToWork = imgDataToWork.to(self.userOpts.device)
+          currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currDefField, idx)
           currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
           lastDeffieldGPU = lastDeffield[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
           
-#           loss = netOptim.optimizeNetTrain(imgDataToWork[sample,None,...], samplingRateIdx)
-          loss = netOptim.optimizeNetOneShot(imgDataToWork[sample,None,...], None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False)
+          loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False)
           
           detachLoss = loss.detach()                
           self.logFile.write(str(epoch) + ';' + str(float(detachLoss)) + '\n')
           self.logFile.flush()
           
-          currDefField[:, :, usedIdx[sample][0]:usedIdx[sample][0]+imgDataToWork.shape[2], usedIdx[sample][1]:usedIdx[sample][1]+imgDataToWork.shape[3], usedIdx[sample][2]:usedIdx[sample][2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
+          currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
         del imgDataToWork, sampledImgData, sampledMaskData, sampledLabelData 
       
       
@@ -414,13 +409,22 @@ class Optimize():
       ## Validation
       ##
       if epoch % self.userOpts.validationIntervall == 0:
-        torch.save({
-              'epoch': epoch,
-              'model_state_dict': self.net.state_dict(),
-              'optimizer_state_dict': optimizer.state_dict(),
-              'loss': loss,
-              'samplingRate': samplingRate
-              }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
+        if epoch < 35:
+          torch.save({
+                'epoch': epoch,
+                'model_state_dict': self.net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'samplingRate': samplingRate
+                }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'35.pt')
+        else:
+          torch.save({
+                'epoch': epoch,
+                'model_state_dict': self.net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                'samplingRate': samplingRate
+                }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
         validationLosses, landmarkDistances = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
         if len(landmarkDistances) > 0:
           self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses[0])) + ';' + str(np.std(validationLosses)) + ';' + str(np.mean(landmarkDistances)) + '\n')
@@ -434,11 +438,15 @@ class Optimize():
     for modelPath in oldModelList:
       modelDict = torch.load(modelPath)
       self.resultModels.append({'samplingRate': modelDict['samplingRate'], 'model_state': modelDict['model_state_dict']})
-  
-  def resetNet(self):
+
+
+  def resetRandomSeeds(self):
     torch.manual_seed(0)
     torch.cuda.manual_seed(0)
     np.random.seed(0)
+  
+  def resetNet(self):
+    self.resetRandomSeeds()
     self.net.reset_params()
   
   def testNetDownSamplePatch(self, dataloader):
@@ -480,10 +488,12 @@ class Optimize():
     
   def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
     samplingRates = self.getDownSampleRates()
-    
     for samplingRateIdx, samplingRate in enumerate(samplingRates):
+      self.resetNet()
       if len(self.resultModels) > samplingRateIdx:
+        print("found model for saplingrate: " + str(samplingRate))
         if self.userOpts.fineTuneOldModel[samplingRateIdx]:
+          print("finetuning model for saplingrate: " + str(samplingRate))
           resultModelsBUP = self.resultModels
           self.resultModels = self.resultModels[0:samplingRateIdx]
           self.net.load_state_dict(resultModelsBUP[samplingRateIdx]['model_state'])
@@ -497,7 +507,7 @@ class Optimize():
         else:
           continue
       else:
-        self.resetNet()
+        print("train model for saplingrate: " + str(samplingRate))
         self.trainModel(samplingRate, samplingRateIdx, dataloader, validationDataLoader)
         self.resultModels.append({'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())})
         torch.save({

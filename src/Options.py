@@ -1,7 +1,7 @@
 import torch
 useContext = True
 
-numberOfEpochs = [100,100,100]#1000
+numberOfEpochs = [35,50,50]#1000
 usePaddedNet=True
 
 trainingFileNamesCSV=''
@@ -28,6 +28,7 @@ useMedianForSampling = (False,False,True)
 
 # only for training the network
 validationIntervall=10
+addVectorFields=True
 netMinPatchSize = patchSize[0]
 fineTuneOldModel=(False, False, False) # works only in combination with "previousModels" parameter
 
