@@ -263,35 +263,39 @@ class Optimize():
         #############
         #############
         #############
-        sampler = Sampler( validationData['mask'], validationData['image'], validationData['label'], self.userOpts.patchSize[samplingRateIdx])
-        idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])        
-        if lastField is None:
-          currValidationField = torch.zeros((validationData['image'].shape[0], validationData['image'].shape[1] * 3, validationData['image'].shape[2], validationData['image'].shape[3], validationData['image'].shape[4]), device="cpu", requires_grad=False)
-        else:
-          currValidationField = lastField.clone()
-        for _ , idx in enumerate(idxs):
-          imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
-          imgDataToWork = imgDataToWork.to(self.userOpts.device)
-          currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currValidationField, idx)
-          currDefFieldGPU = currValidationField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
-          lastDeffieldGPU = lastField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
-           
-          loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False, optimizeTmp=False)
-           
-          detachLoss = loss.detach()      
-          validationLosses.append(float(detachLoss))          
- 
-          currValidationField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")        
+#         sampler = Sampler( validationData['mask'], validationData['image'], validationData['label'], self.userOpts.patchSize[samplingRateIdx])
+#         idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])        
+#         if lastField is None:
+#           currValidationField = torch.zeros((validationData['image'].shape[0], validationData['image'].shape[1] * 3, validationData['image'].shape[2], validationData['image'].shape[3], validationData['image'].shape[4]), device="cpu", requires_grad=False)
+#         else:
+#           currValidationField = lastField.clone()
+#           
+#         currValidationField = currValidationField * samplingRate
+#         currValidationField = sampleImg(currValidationField, samplingRate)
+#         
+#         for _ , idx in enumerate(idxs):
+#           imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+#           imgDataToWork = imgDataToWork.to(self.userOpts.device)
+#           currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currValidationField, idx)
+#           currDefFieldGPU = currValidationField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+#           lastDeffieldGPU = lastField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+#            
+#           loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False, optimizeTmp=False)
+#            
+#           detachLoss = loss.detach()      
+#           validationLosses.append(float(detachLoss))          
+#  
+#           currValidationField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")        
          
         #############
         #############
         #############
         
-#         currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
-#         if lastField is not None:
-#           currValidationField = combineDeformationFields(currValidationField, lastField)
-#         validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
-#         validationLosses.append(float(validationLoss.detach()))
+        currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
+        if lastField is not None:
+          currValidationField = combineDeformationFields(currValidationField, lastField)
+        validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
+        validationLosses.append(float(validationLoss.detach()))
         
         if len(landmarksBeforeDeformation) > 0:
           validationData['landmarks'] = self.deformLandmarks(validationData['landmarks'], validationData['image'], currValidationField, validationDataLoader.dataset.getSpacing(validationDataIdx),

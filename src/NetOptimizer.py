@@ -195,7 +195,7 @@ class NetOptimizer(object):
     loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
     return loss    
             
-  def optimizeNetOneShot(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False, optimizeTmp=True):
+  def optimizeNetOneShot(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
@@ -267,7 +267,6 @@ class NetOptimizer(object):
     torch.cuda.empty_cache()
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
     
-    if optimizeTmp:      
-      loss.backward()
-      self.optimizer.step()
+    loss.backward()
+    self.optimizer.step()
     return loss        
