@@ -237,7 +237,7 @@ class Optimize():
   
   def validateModel(self, validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift):
     with torch.no_grad():
-      self.net.eval()
+#       self.net.eval()
       useContext = self.userOpts.useContext
       self.userOpts.useContext = False
       validationLosses = []
@@ -246,7 +246,7 @@ class Optimize():
       for validationDataIdx , validationData in enumerate(validationDataLoader, 0):
         if not self.userOpts.usePaddedNet:
           validationData['image'], validationData['mask'], validationData['label'] = getPaddedData(validationData['image'], validationData['mask'], validationData['label'], padVals)
-        dataBeforeDeformation = validationData
+        landmarksBeforeDeformation = validationData['landmarks']
         
         lastField = None
         if len(self.resultModels) > 0:
@@ -260,22 +260,45 @@ class Optimize():
               lastField = combineDeformationFields(defField, lastField)            
           self.net.load_state_dict(currentState)
         
-        currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
-        if lastField is not None:
-          currValidationField = combineDeformationFields(currValidationField, lastField)
+        #############
+        #############
+        #############
+        sampler = Sampler( validationData['mask'], validationData['image'], validationData['label'], self.userOpts.patchSize[samplingRateIdx])
+        idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])        
+        currValidationField = lastField.clone()
+        for _ , idx in enumerate(idxs):
+          imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+          imgDataToWork = imgDataToWork.to(self.userOpts.device)
+          currDefFieldIdx, offset = self.getSubCurrDefFieldIdx(currValidationField, idx)
+          currDefFieldGPU = currValidationField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+          lastDeffieldGPU = lastField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
+           
+          loss = netOptim.optimizeNetOneShot(imgDataToWork, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False, optimizeTmp=False)
+           
+          detachLoss = loss.detach()      
+          validationLosses.append(float(detachLoss))          
+ 
+          currValidationField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")        
+         
+        #############
+        #############
+        #############
         
-        validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
-        validationLosses.append(float(validationLoss.detach()))
+#         currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
+#         if lastField is not None:
+#           currValidationField = combineDeformationFields(currValidationField, lastField)
+#         validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
+#         validationLosses.append(float(validationLoss.detach()))
         
-        if len(dataBeforeDeformation['landmarks']) > 0:
+        if len(landmarksBeforeDeformation) > 0:
           validationData['landmarks'] = self.deformLandmarks(validationData['landmarks'], validationData['image'], currValidationField, validationDataLoader.dataset.getSpacing(validationDataIdx),
                                 validationDataLoader.dataset.getOrigin(validationDataIdx), 
                                 validationDataLoader.dataset.getDirectionCosines(validationDataIdx))
           totalMeanPointDist = 0.0
-          for landmarkChannel in range(-1, len(dataBeforeDeformation['landmarks']) - 1):
-            meanPointDistance, _ = pp.calculatePointSetDistance(dataBeforeDeformation['landmarks'][landmarkChannel+1], validationData['landmarks'][landmarkChannel], False)
+          for landmarkChannel in range(-1, len(landmarksBeforeDeformation) - 1):
+            meanPointDistance, _ = pp.calculatePointSetDistance(landmarksBeforeDeformation[landmarkChannel+1], validationData['landmarks'][landmarkChannel], False)
             totalMeanPointDist += meanPointDistance
-          landmarkDistances.append(totalMeanPointDist / float(len(dataBeforeDeformation['landmarks'])))
+          landmarkDistances.append(totalMeanPointDist / float(len(landmarksBeforeDeformation)))
                 
       del validationData, currValidationField
       
@@ -359,7 +382,7 @@ class Optimize():
         if len(self.resultModels) > 0:
           currentState = copy.deepcopy(self.net.state_dict())
           with torch.no_grad():
-            self.net.eval()
+#             self.net.eval()
             useContext = self.userOpts.useContext
             self.userOpts.useContext = False
             for previousSampleIdxs in range(samplingRateIdx):
@@ -409,27 +432,18 @@ class Optimize():
       ## Validation
       ##
       if epoch % self.userOpts.validationIntervall == 0:
-        if epoch < 35:
-          torch.save({
-                'epoch': epoch,
-                'model_state_dict': self.net.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss,
-                'samplingRate': samplingRate
-                }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'35.pt')
-        else:
-          torch.save({
-                'epoch': epoch,
-                'model_state_dict': self.net.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'loss': loss,
-                'samplingRate': samplingRate
-                }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+'.pt')
+        torch.save({
+              'epoch': epoch,
+              'model_state_dict': self.net.state_dict(),
+              'optimizer_state_dict': optimizer.state_dict(),
+              'loss': loss,
+              'samplingRate': samplingRate
+              }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+str(epoch)+'.pt')
         validationLosses, landmarkDistances = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
         if len(landmarkDistances) > 0:
-          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses[0])) + ';' + str(np.std(validationLosses)) + ';' + str(np.mean(landmarkDistances)) + '\n')
+          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + ';' + str(np.mean(landmarkDistances)) + ';' + '\n')
         else:
-          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses[0])) + ';' + str(np.std(validationLosses)) + ';' + '0.0' + '\n')
+          self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + ';' + '0.0' + '\n')
         self.validationLogFile.flush()
         del validationLosses
         self.net.train() 
@@ -452,39 +466,41 @@ class Optimize():
   def testNetDownSamplePatch(self, dataloader):
     samplerShift = (0,0,0)
     receptiveFieldOffset = getReceptiveFieldOffset(self.userOpts.netDepth)
-    if not self.userOpts.usePaddedNet:
-      samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
-    with torch.no_grad():
-      self.net.eval()
-      useContext = self.userOpts.useContext
-      self.userOpts.useContext = False
-      for datasetIdx , data in enumerate(dataloader, 0):
-        if not self.userOpts.usePaddedNet:
-          data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], data)
-        if len(self.resultModels) > 0:
-          pp = PointProcessor()
-          dataBeforeDeformation = data
-          
-          lastField = None
-          for modelIdx, previousModels in enumerate(self.resultModels):
-            self.net.load_state_dict(previousModels['model_state'])
-            defField = self.getDeformationField(data, previousModels['samplingRate'], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
-            if lastField is None:
-              lastField = defField
-            else:
-              lastField = combineDeformationFields(defField, lastField)            
+    logfileName = self.userOpts.outputPath + os.path.sep + 'testLog.csv'
+    with open(logfileName,'w') as testlogFile:
+      if not self.userOpts.usePaddedNet:
+        samplerShift = (receptiveFieldOffset*2,receptiveFieldOffset*2,receptiveFieldOffset*2)
+      with torch.no_grad():
+#         self.net.eval()
+        useContext = self.userOpts.useContext
+        self.userOpts.useContext = False
+        for datasetIdx , data in enumerate(dataloader, 0):
+          if not self.userOpts.usePaddedNet:
+            data['image'], data['mask'], data['label'] = getPaddedData(data['image'], data['mask'], data['label'], data)
+          if len(self.resultModels) > 0:
+            pp = PointProcessor()
+            dataBeforeDeformation = data
             
-            self.saveDefField(defField, dataloader, datasetIdx, 'tmpField'+str(modelIdx))
-          
-          self.saveDefField(lastField, dataloader, datasetIdx)
-          data = self.applyDefField(lastField, data, datasetIdx, dataloader.dataset)
-          self.saveDeformedData(data, dataloader, datasetIdx)
-          for landmarkChannel in range(-1, len(dataBeforeDeformation['landmarks']) - 1):
-            meanPointDistance, _ = pp.calculatePointSetDistance(dataBeforeDeformation['landmarks'][landmarkChannel+1], data['landmarks'][landmarkChannel], False)
-            print(meanPointDistance)
-         
-      self.userOpts.useContext = useContext
+            lastField = None
+            for modelIdx, previousModels in enumerate(self.resultModels):
+              self.net.load_state_dict(previousModels['model_state'])
+              defField = self.getDeformationField(data, previousModels['samplingRate'], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
+              if lastField is None:
+                lastField = defField
+              else:
+                lastField = combineDeformationFields(defField, lastField)            
+              
+              self.saveDefField(defField, dataloader, datasetIdx, 'tmpField'+str(modelIdx))
             
+            self.saveDefField(lastField, dataloader, datasetIdx)
+            data = self.applyDefField(lastField, data, datasetIdx, dataloader.dataset)
+            self.saveDeformedData(data, dataloader, datasetIdx)
+            pointDistance = ''
+            for landmarkChannel in range(-1, len(dataBeforeDeformation['landmarks']) - 1):
+              meanPointDistance, _ = pp.calculatePointSetDistance(dataBeforeDeformation['landmarks'][landmarkChannel+1], data['landmarks'][landmarkChannel], False)
+              pointDistance += str(meanPointDistance) + ';'
+            testlogFile.write(str(datasetIdx) + ';' + pointDistance + '\n')
+        self.userOpts.useContext = useContext
     
   def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
     samplingRates = self.getDownSampleRates()
