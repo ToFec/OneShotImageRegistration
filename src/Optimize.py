@@ -265,7 +265,10 @@ class Optimize():
         #############
         sampler = Sampler( validationData['mask'], validationData['image'], validationData['label'], self.userOpts.patchSize[samplingRateIdx])
         idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])        
-        currValidationField = lastField.clone()
+        if lastField is None:
+          currValidationField = torch.zeros((validationData['image'].shape[0], validationData['image'].shape[1] * 3, validationData['image'].shape[2], validationData['image'].shape[3], validationData['image'].shape[4]), device="cpu", requires_grad=False)
+        else:
+          currValidationField = lastField.clone()
         for _ , idx in enumerate(idxs):
           imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
           imgDataToWork = imgDataToWork.to(self.userOpts.device)
