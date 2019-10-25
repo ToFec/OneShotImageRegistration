@@ -22,7 +22,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -57,7 +57,13 @@ def main(argv):
     elif opt == '--previousModels':
       oldModelList = arg.split()
     elif opt == '--testModels':
-      testModels = True        
+      testModels = True    
+    elif opt == '--fineTune':
+      stringList = arg.split()
+      userOpts.fineTuneOldModel=[i.lower() in("true","t") for i in stringList]
+    elif opt == '--randomSampling':
+      stringList = arg.split()
+      userOpts.randomSampling = [i.lower() in("true","t") for i in stringList]
               
       
   torch.manual_seed(0)

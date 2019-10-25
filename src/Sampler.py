@@ -44,7 +44,18 @@ class Sampler(object):
     else:
       labelDataToWork = torch.Tensor();
       
-    return (imgDataToWork, labelDataToWork, usedIdx)    
+    return (imgDataToWork, labelDataToWork, usedIdx) 
+  
+  def getRandomSubSamplesIdxs(self, numberofSamplesPerRun, idxs):
+   
+    randSampleIdxs = np.random.randint(0, len(idxs[0]), (numberofSamplesPerRun,))
+    usedIdx = []
+    for j in range(0, numberofSamplesPerRun):
+      idx2 = idxs[1][randSampleIdxs[j]]
+      idx3 = idxs[2][randSampleIdxs[j]]
+      idx4 = idxs[3][randSampleIdxs[j]]
+      usedIdx.append((idx2, idx3, idx4, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]))
+    return usedIdx     
   
   def getSubSample(self, idx, normImgPatch):
       imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]

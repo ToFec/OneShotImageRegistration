@@ -294,8 +294,8 @@ class Optimize():
         currValidationField = self.getDeformationField(validationData, samplingRate, self.userOpts.patchSize[samplingRateIdx], self.userOpts.useMedianForSampling[samplingRateIdx], samplerShift)
         if lastField is not None:
           currValidationField = combineDeformationFields(currValidationField, lastField)
-        validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
-        validationLosses.append(float(validationLoss.detach()))
+        #validationLoss = netOptim.calculateLoss(validationData['image'].to(self.userOpts.device), currValidationField, samplingRateIdx, (0, 0, 0, validationData['image'].shape[2],validationData['image'].shape[3], validationData['image'].shape[4]))
+        validationLosses.append(0.0)#float(validationLoss.detach()))
         
         if len(landmarksBeforeDeformation) > 0:
           validationData['landmarks'] = self.deformLandmarks(validationData['landmarks'], validationData['image'], currValidationField, validationDataLoader.dataset.getSpacing(validationDataIdx),
@@ -416,7 +416,16 @@ class Optimize():
         currDefField = sampleImg(currDefField, samplingRate)
         
         sampler = Sampler(sampledMaskData, sampledImgData, sampledLabelData, self.userOpts.patchSize[samplingRateIdx])
-        idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+        
+        if self.userOpts.randomSampling[samplingRateIdx]:
+          numberofSamplesPerRun = int(sampledImgData.numel() / (self.userOpts.patchSize[samplingRateIdx] * self.userOpts.patchSize[samplingRateIdx] * self.userOpts.patchSize[samplingRateIdx]))
+          if numberofSamplesPerRun < 1:
+            numberofSamplesPerRun = 1
+          idxs = sampler.getIndicesForRandomization()
+          idxs = sampler.getRandomSubSamplesIdxs(numberofSamplesPerRun, idxs)
+        else:
+          idxs = sampler.getIndicesForOneShotSampling(samplerShift, self.userOpts.useMedianForSampling[samplingRateIdx])
+        
         lastDeffield = currDefField.clone()
         for _ , idx in enumerate(idxs):
           imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
@@ -458,7 +467,10 @@ class Optimize():
   def setOldModels(self, oldModelList):
     for modelPath in oldModelList:
       modelDict = torch.load(modelPath)
-      self.resultModels.append({'samplingRate': modelDict['samplingRate'], 'model_state': modelDict['model_state_dict']})
+      if modelDict.has_key('optimizer_state_dict'):
+        self.resultModels.append({'samplingRate': modelDict['samplingRate'], 'model_state': modelDict['model_state_dict'], 'optimizer_state': modelDict['optimizer_state_dict']})
+      else:
+        self.resultModels.append({'samplingRate': modelDict['samplingRate'], 'model_state': modelDict['model_state_dict']})
 
 
   def resetRandomSeeds(self):
@@ -600,10 +612,17 @@ class Optimize():
             print('lossTollerance: ', lossTollerance)
             
             lastDeffield = currDefField.clone()
+            
+            if len(self.resultModels) > samplingRateIdx:
+              self.net.load_state_dict(self.resultModels[samplingRateIdx]['model_state'])
+            
             for patchIdx, idx in enumerate(idxs):
               print('register patch %i out of %i patches.' % (patchIdx, len(idxs)))
-
               optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+              
+              if len(self.resultModels) > samplingRateIdx:
+                self.net.load_state_dict(self.resultModels[samplingRateIdx]['model_state'])
+                
               netOptim.setOptimizer(optimizer)
               
               imgDataToWork = sampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
