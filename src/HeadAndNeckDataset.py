@@ -12,8 +12,8 @@ from Context import imgDataDef
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, csv_file, transform=None, loadOnInstantiation=True, smoothFilter=None):
-
+    def __init__(self, csv_file, transform=None, loadOnInstantiation=True, smoothFilter=None, normlizeImages=True):
+        self.normlizeImages = normlizeImages
         self.transform = transform
         self.smooth = smoothFilter
         self.loadOnInstantiation = loadOnInstantiation
@@ -146,29 +146,15 @@ class HeadAndNeckDataset(Dataset):
           maskData.append(maskNii)
         maskData = np.stack(maskData)
         
-        imgMean = imgData[maskData > 0].mean()
-        imgData = imgData - imgMean
-        imgStd = imgData[maskData > 0].std()
-        imgData = imgData / imgStd
-        imgData[maskData == 0] = 0
-        self.meansAndStds[idx] = (imgMean, imgStd)
+        imgData = self.normalize(imgData, maskData, idx)
       elif Options.maskOutZeros:  
         maskData = np.ones(imgData.shape,dtype=np.ubyte)
         maskData[imgData == 0] = 0
         
-        imgMean = imgData[maskData > 0].mean()
-        imgData = imgData - imgMean
-        imgStd = imgData[maskData > 0].std()
-        imgData = imgData / imgStd
-        imgData[maskData == 0] = 0
-        self.meansAndStds[idx] = (imgMean, imgStd)
+        imgData = self.normalize(imgData, maskData, idx)
         
       else:
-        imgMean = imgData.mean()
-        imgData = imgData - imgMean
-        imgStd = imgData.std()
-        imgData = imgData / imgStd
-        self.meansAndStds[idx] = (imgMean, imgStd)
+        imgData = self.normalize(imgData, None, idx)
       
       imgData, maskData, labelData = self.getRightSizedData(imgData, maskData, labelData, idx)
       
@@ -186,6 +172,25 @@ class HeadAndNeckDataset(Dataset):
         sample = self.smooth(sample)
       return sample  
     
+    
+    def normalize(self, imgData, maskData, idx):
+      if self.normlizeImages:
+        if maskData is not None:
+          imgMean = imgData[maskData > 0].mean()
+          imgData = imgData - imgMean
+          imgStd = imgData[maskData > 0].std()
+          imgData = imgData / imgStd
+          imgData[maskData == 0] = 0
+          self.meansAndStds[idx] = (imgMean, imgStd)        
+        else:
+          imgMean = imgData.mean()
+          imgData = imgData - imgMean
+          imgStd = imgData.std()
+          imgData = imgData / imgStd
+          self.meansAndStds[idx] = (imgMean, imgStd)
+      else:
+        self.meansAndStds[idx] = (0, 1)
+      return imgData
     
     def getSpacing(self, idx):
       return self.spacings[idx]

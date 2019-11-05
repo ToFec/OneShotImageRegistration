@@ -130,8 +130,12 @@ class PointProcessor():
       distances.append(currDist)
       if printToCmdLine:
         print(currDist)
-    meanDistance = np.mean(distances)
-    std = np.std(distances)
+    if len(distances) > 0:
+      meanDistance = np.mean(distances)
+      std = np.std(distances)
+    else:
+      meanDistance = -1.0
+      std = -1.0
     return meanDistance, std
 
 ##expects a vector field that points from input to output
