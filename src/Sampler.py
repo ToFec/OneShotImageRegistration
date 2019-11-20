@@ -16,18 +16,20 @@ class Sampler(object):
     self.maxIdxs = getMaxIdxs(imgData.shape, imgPatchSize)
     self.patchSizes = getPatchSize(imgData.shape, imgPatchSize)
 
-  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, currIteration=0, normImgPatch=False):
+  def getRandomSubSamples(self, numberofSamplesPerRun, idxs, normImgPatch=False):
    
     imgDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
     if (self.labelData.dim() == self.imgData.dim()):
       labelDataNew = torch.empty((numberofSamplesPerRun, self.imgData.shape[1], self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]), requires_grad=False)
     
     randSampleIdxs = np.random.randint(0, len(idxs[0]), (numberofSamplesPerRun,))
+    usedIdx = []
     for j in range(0, numberofSamplesPerRun):
       idx0 = idxs[0][randSampleIdxs[j]]
       idx2 = idxs[1][randSampleIdxs[j]]
       idx3 = idxs[2][randSampleIdxs[j]]
       idx4 = idxs[3][randSampleIdxs[j]]
+      usedIdx.append((idx2, idx3, idx4, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]))
       imgPatch = self.imgData[idx0, : , idx2:idx2 + self.patchSizes[0], idx3:idx3 + self.patchSizes[1], idx4:idx4 + self.patchSizes[2]]
       if normImgPatch:
         imgPatch = normalizeImg(imgPatch)
@@ -42,7 +44,18 @@ class Sampler(object):
     else:
       labelDataToWork = torch.Tensor();
       
-    return (imgDataToWork, labelDataToWork)    
+    return (imgDataToWork, labelDataToWork, usedIdx) 
+  
+  def getRandomSubSamplesIdxs(self, numberofSamplesPerRun, idxs):
+   
+    randSampleIdxs = np.random.randint(0, len(idxs[0]), (numberofSamplesPerRun,))
+    usedIdx = []
+    for j in range(0, numberofSamplesPerRun):
+      idx2 = idxs[1][randSampleIdxs[j]]
+      idx3 = idxs[2][randSampleIdxs[j]]
+      idx4 = idxs[3][randSampleIdxs[j]]
+      usedIdx.append((idx2, idx3, idx4, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]))
+    return usedIdx     
   
   def getSubSample(self, idx, normImgPatch):
       imgPatch = self.imgData[:, :, idx[0]:idx[0] + idx[3], idx[1]:idx[1] + idx[4], idx[2]:idx[2] + idx[5]]
@@ -90,14 +103,16 @@ class Sampler(object):
     return (imgDataToWork, labelDataToWork)  
   
   def getIndicesForRandomization(self):
-    maskChanSumCrop = self.maskChanSum[:, 0:self.maxIdxs[0], 0:self.maxIdxs[1], 0:self.maxIdxs[2]]
+    #we look in the middle of the patch whether it is zero or not, therefore we add half of the patchsize; helpful with high downsampling when patchsize is bigger than image
+    maskChanSumCrop = self.maskChanSum[:, 0+self.patchSizes[0]/2:self.maxIdxs[0]+self.patchSizes[0]/2, 
+                                       0+self.patchSizes[1]/2:self.maxIdxs[1]+self.patchSizes[1]/2, 0+self.patchSizes[2]/2:self.maxIdxs[2]+self.patchSizes[2]/2]
     idxs = np.where(maskChanSumCrop > 0)
   
     return idxs
   
   def getIndicesForOneShotSampling(self, minusShift, medianSampler=True):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
-    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
+    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))
   
   def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
@@ -106,7 +121,7 @@ class Sampler(object):
         for patchIdx2 in range(startidx[2], self.maxIdxs[2], shift[2]):
           if (self.maskChanSum[:,patchIdx0+offset:patchIdx0 + self.patchSizes[0] - offset,
                                 patchIdx1+offset:patchIdx1 + self.patchSizes[1] - offset,
-                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].median() > 0):
+                                patchIdx2+offset:patchIdx2 + self.patchSizes[2] - offset].contiguous().median() > 0):
             idxs.append( (patchIdx0, patchIdx1, patchIdx2, self.patchSizes[0], self.patchSizes[1], self.patchSizes[2]) )
     return idxs
 

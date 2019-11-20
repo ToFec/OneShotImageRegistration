@@ -45,6 +45,22 @@ def getZeroDefField(imagShape, device):
     
   return Context.zeroDefField
 
+#for images
+def getZeroIdxFieldImg(imagShape, device):
+  if (Context.zeroIndicesImg is None) or (imagShape[2:] != Context.zeroIndicesImg[0].shape[2:]):
+    zeroIndices = torch.from_numpy( np.indices([imagShape[0],imagShape[1],imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
+    idxs0 = zeroIndices[0].long().to(device)
+    idxs1 = zeroIndices[1].long().to(device)
+    idxs2 = zeroIndices[2].to(device)
+    idxs3 = zeroIndices[3].to(device)
+    idxs4 = zeroIndices[4].to(device)
+    if not useropts.useContext:
+      return [idxs0, idxs1, idxs2, idxs3, idxs4]
+    Context.zeroIndicesImg = [idxs0, idxs1, idxs2, idxs3, idxs4]
+  [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndicesImg
+  return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
+
+#for deffields
 def getZeroIdxField(imagShape, device):
   if (Context.zeroIndices is None) or (imagShape[2:] != Context.zeroIndices[0].shape[2:]):
     zeroIndices = torch.from_numpy( np.indices([imagShape[0],3,imagShape[2],imagShape[3],imagShape[4]],dtype=np.float32))
@@ -60,20 +76,21 @@ def getZeroIdxField(imagShape, device):
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
-def getImgDataDef(imagShape, device):
+
+def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
   if useropts.useContext:
-    if (Context.imgDataDef is None) or (imagShape != Context.imgDataDef.shape):
-      imgDataDef = torch.empty(imagShape, device=device, requires_grad=False)
-      Context.imgDataDef = imgDataDef
+    if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape) or Context.imgDataDef[imgIdx].dtype != dataType:
+      imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
+      Context.imgDataDef[imgIdx] = imgDataDef
     else:
-      Context.imgDataDef.detach_()
-    return Context.imgDataDef
+      Context.imgDataDef[imgIdx].detach_()
+    return Context.imgDataDef[imgIdx]
   else:
-    return torch.empty(imagShape, device=device, requires_grad=False)
+    return torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
 
 def getImgDataDef2(imagShape, device):
   if useropts.useContext:
-    if (Context.imgDataDef2 is None) or (imagShape != Context.imgDataDef2.shape):
+    if (Context.imgDataDef2 is None) or (Context.imgDataDef2 is None) or (imagShape != Context.imgDataDef2.shape):
       imgDataDef2 = torch.empty(imagShape, device=device, requires_grad=False)
       Context.imgDataDef2 = imgDataDef2
     else:
@@ -219,6 +236,44 @@ def getPatchSize(imgShape, imgPatchSize):
     
   return [patchSize0, patchSize1, patchSize2]
 
+def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
+  zeroIdxField = getZeroIdxFieldImg(imgToDef.shape, device)
+  zeroIdxField[4] += defField[:,None,0,]
+  zeroIdxField[3] += defField[:,None,1,]
+  zeroIdxField[2] += defField[:,None,2,]
+  
+  zeroIdxField[4] = zeroIdxField[4].round().long()
+  zeroIdxField[3] = zeroIdxField[3].round().long()
+  zeroIdxField[2] = zeroIdxField[2].round().long()
+  
+  boolMask = (((zeroIdxField[4] > (defField.shape[4] - 1)) | (zeroIdxField[4] < 0)) | ((zeroIdxField[3] > (defField.shape[3] - 1)) | (zeroIdxField[3] < 0)) | ((zeroIdxField[2] > (defField.shape[2] - 1)) | (zeroIdxField[2] < 0)))
+  
+  zeroIdxField[4][zeroIdxField[4] > (defField.shape[4] - 1)] = defField.shape[4] - 1
+  zeroIdxField[4][zeroIdxField[4] < 0] = 0
+    
+  zeroIdxField[3][zeroIdxField[3] > (defField.shape[3] - 1)] = defField.shape[3] - 1
+  zeroIdxField[3][zeroIdxField[3] < 0] = 0
+    
+  zeroIdxField[2][zeroIdxField[2] > (defField.shape[2] - 1)] = defField.shape[2] - 1
+  zeroIdxField[2][zeroIdxField[2] < 0] = 0
+  
+  deformed = imgToDef[zeroIdxField[0], zeroIdxField[1], zeroIdxField[2], zeroIdxField[3], zeroIdxField[4]]
+  deformed[boolMask] = deformed[boolMask].detach()
+  return deformed
+  
+
+def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0, channelOffset = 1):
+  imgDataDef = getImgDataDef(imgDataToWork.shape, imgDataToWork.device, imgDataToWork.dtype, imgIdx)
+  for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
+    imgToDef = imgDataToWork[:, None, chanIdx, ]
+    chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+    if nearestNeighbor:
+      deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], imgDataToWork.device)        
+    else:
+      deformedTmp = deformImage(imgToDef, addedField[: , chanRange, ], imgDataToWork.device, False)
+    imgDataDef[:, chanIdx + channelOffset, ] = deformedTmp[:, 0, ]
+  return imgDataDef
+
 def deformImage(imgToDef, defFields, device, detach=True):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
@@ -322,3 +377,19 @@ def save_grad(name):
       print(name, np.float64(torch.sum(grad)))
 
   return hook
+
+# newField, oldField
+def combineDeformationFields(defField0, defField1, requiresGrad=False):
+  if useropts.addVectorFields:
+    defField0 = defField0 + defField1
+  else:
+    xDef = torch.empty(defField0.shape, device=defField0.device, requires_grad=requiresGrad)
+    for chanIdx in range(-1, (defField0.shape[1]/3) - 1):
+      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+      for channel in chanRange:
+        imgToDef = defField1[:, None, channel, ]                
+        #deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, defField0[: , chanRange, ], defField0.device)
+        deformedTmp = deformImage(imgToDef, defField0[: , chanRange, ], defField0.device, not requiresGrad)
+        xDef[:, channel, ] = deformedTmp[:, 0, ]
+    defField0 = defField0.add(xDef)
+  return defField0

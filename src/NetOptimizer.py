@@ -25,7 +25,9 @@ class NetOptimizer(object):
   def normalizeWeights(self, ccW, sW, cyW):
     weightSum = ccW + sW + cyW
     return [ccW  / weightSum, sW  / weightSum, cyW  / weightSum]
-
+  
+  def setSpacing(self, spacing):
+    self.spacing = spacing
 
   def cycleLossCalculationsNearestNeighbor(self, zeroIndices, cycleImgData, defFields, chanRange, currDefFields, idx, borderCrossingArry=None):
     fieldsIdxs4 = zeroIndices[4].round().long()
@@ -148,13 +150,66 @@ class NetOptimizer(object):
     zeroIndices[4][:,None,1,] += tmpField
     zeroIndices[4][:,None,2,] += tmpField 
             
-  def optimizeNet(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
+            
+  def optimizeNetTrain(self, imgDataToWork, itIdx=0):
+    self.optimizer.zero_grad()
+    defFields = self.net(imgDataToWork)
+    
+    loss = self.calculateLoss(imgDataToWork, defFields, itIdx, (0,0,0, defFields.shape[2],defFields.shape[3],defFields.shape[4]))    
+    torch.cuda.empty_cache()
+    loss.backward()
+    self.optimizer.step()
+    return loss    
+  
+  def calculateLoss(self, imgDataToWork, defField, itIdx, idx):
+    lossCalculator = lf.LossFunctions(imgDataToWork, defField, None, self.spacing)
+    
+    smoothnessDF = 0.0
+    smoothNessWeight = self.userOpts.smoothW[itIdx]
+    crossCorrWeight = self.userOpts.ccW
+    cyclicWeight = self.userOpts.cycleW
+    crossCorrWeight,smoothNessWeight, cyclicWeight = self.normalizeWeights(crossCorrWeight, smoothNessWeight, cyclicWeight)
+    
+    if imgDataToWork.shape[1] > 2:
+      smoothnessDF =lossCalculator.smoothnessVecFieldT(self.userOpts.device)
+    else:
+      smoothnessDF = lossCalculator.smoothnessVecField(self.userOpts.device)
+     
+    imgDataDef = Utils.getImgDataDef(imgDataToWork.shape, self.userOpts.device)
+    for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
+      imgToDef = imgDataToWork[:, None, chanIdx, ]
+      chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
+      deformedTmp = Utils.deformImage(imgToDef, defField[: , chanRange, ], self.userOpts.device, False)
+      imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
+
+    cycleImgData = Utils.getCycleImgData(defField.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
+    zeroIndices = Utils.getZeroIdxField(defField.shape, self.userOpts.device)
+    outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.uint8, device=self.userOpts.device)
+    if self.userOpts.cycleW > 0.0:
+      for chanIdx in range(imgDataToWork.shape[1] - 1, -1, -1):
+        chanRange = range(chanIdx * 3, chanIdx * 3 + 3)   
+        self.cycleLossCalculationMethod(zeroIndices, cycleImgData, defField, chanRange, None, idx, outOfBoundsTensor)
+   
+    crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
+    cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)       
+    loss = crossCorrWeight * crossCorr + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss
+    return loss    
+            
+  def optimizeNetOneShot(self, imgDataToWork, labelToWork, lastDefField = None, currDefFields = None, idx=None, itIdx=0, printLoss = False):
     # zero the parameter gradients
     self.optimizer.zero_grad()
      
     defFields = self.net(imgDataToWork)
-      
-    addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    
+    if self.userOpts.addVectorFields:
+      addedField = lastDefField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]+ defFields
+    else:
+      tmpField = torch.zeros_like(lastDefField)
+      tmpField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = tmpField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] + defFields
+      tmpField = Utils.combineDeformationFields(tmpField, lastDefField)
+      addedField = tmpField[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]]
+    
+    
       
     currDefFields[:, :, idx[0]:idx[0]+defFields.shape[2], idx[1]:idx[1]+defFields.shape[3], idx[2]:idx[2]+defFields.shape[4]] = addedField.detach()
 
@@ -211,7 +266,7 @@ class NetOptimizer(object):
 #     print('weighted cc: %.5f smmothness: %.5f cycleLoss: %.5f' % (crossCorrWeight * crossCorr, smoothNessWeight * smoothnessDF, self.userOpts.cycleW * cycleLoss))
     torch.cuda.empty_cache()
 #     print(torch.cuda.memory_allocated() / 1048576.0) 
-          
+    
     loss.backward()
     self.optimizer.step()
     return loss        

@@ -13,6 +13,7 @@ import time
 from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
 from Net import UNet
 import Options as userOpts
+from __builtin__ import hasattr
 
 def main(argv):
   
@@ -21,7 +22,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -31,9 +32,13 @@ def main(argv):
     print(callString)
     return
 
+  oldModelList = None
+  testModels = False
   for opt, arg in opts:
     if opt == '--trainingFiles':
       userOpts.trainingFileNamesCSV = arg
+    elif opt == '--validationFiles':
+      userOpts.validationFileNameCSV = arg      
     elif opt == '--device':
       userOpts.device = arg      
     elif opt == '--outputPath':
@@ -48,10 +53,22 @@ def main(argv):
       userOpts.cycleW = float(arg)
     elif opt == '--smoothW':
       stringList = arg.split()
-      userOpts.smoothW = [float(i) for i in stringList]  
+      userOpts.smoothW = [float(i) for i in stringList]
+    elif opt == '--previousModels':
+      oldModelList = arg.split()
+    elif opt == '--testModels':
+      testModels = True    
+    elif opt == '--fineTune':
+      stringList = arg.split()
+      userOpts.fineTuneOldModel=[i.lower() in("true","t") for i in stringList]
+    elif opt == '--randomSampling':
+      stringList = arg.split()
+      userOpts.randomSampling = [i.lower() in("true","t") for i in stringList]
+              
       
   torch.manual_seed(0)
   np.random.seed(0)
+  torch.cuda.manual_seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
 
@@ -59,27 +76,44 @@ def main(argv):
     os.makedirs(userOpts.outputPath)
 
   headAndNeckTrainSet = HeadAndNeckDataset(userOpts.trainingFileNamesCSV, ToTensor(), True)
+  if hasattr(userOpts, 'validationFileNameCSV'):
+    validationSet = HeadAndNeckDataset(userOpts.validationFileNameCSV, ToTensor(), True)
+    validationDataLoader = DataLoader(validationSet, batch_size=1, shuffle=False, num_workers=0)
   
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
+  
+
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
   with Optimize(net, userOpts) as trainTestOptimize:
     print(net)
     start = time.time()
+    if oldModelList is not None:
+      trainTestOptimize.setOldModels(oldModelList)
     if False:#userOpts.device == "cpu":
       net.share_memory()
       processes = []
       num_processes = 2
       for rank in range(num_processes):
-        p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
+        if testModels:
+          p = mp.Process(target=trainTestOptimize.testNetDownSamplePatch, args=(dataloader))
+        elif hasattr(userOpts, 'validationFileNameCSV'):
+          p = mp.Process(target=trainTestOptimize.trainNetDownSamplePatch, args=(dataloader, validationDataLoader))
+        else:
+          p = mp.Process(target=trainTestOptimize.trainTestNetDownSamplePatch, args=(dataloader))
         p.start()
         processes.append(p)
       for p in processes:
         p.join()
           
     else:
-      trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
+      if testModels:
+        trainTestOptimize.testNetDownSamplePatch(dataloader)
+      elif hasattr(userOpts, 'validationFileNameCSV'):
+        trainTestOptimize.trainNetDownSamplePatch(dataloader, validationDataLoader)
+      else:
+        trainTestOptimize.trainTestNetDownSamplePatch(dataloader)
     end = time.time()
     print('Registration took overall:', end - start, 'seconds')
     
