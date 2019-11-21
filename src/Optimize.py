@@ -643,9 +643,30 @@ class Optimize():
                 runningLoss[lossCounter] = detachLoss
                 if lossCounter == 9:
                   meanLoss = runningLoss.mean()
-                  self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
+
+                  landmarksBeforeDeformation = data['landmarks']
+                  if len(landmarksBeforeDeformation) > 0 and self.userOpts.logLandmarkDistance:
+                    currDefField[:, :, idx[0]:idx[0]+imgDataToWork.shape[2], idx[1]:idx[1]+imgDataToWork.shape[3], idx[2]:idx[2]+imgDataToWork.shape[4]] = currDefFieldGPU[:,:,offset[0]:offset[0]+imgDataToWork.shape[2],offset[1]:offset[1]+imgDataToWork.shape[3],offset[2]:offset[2]+imgDataToWork.shape[4]].to("cpu")
+                    upSampleRate = 1 / samplingRate
+                    tmpDefField = currDefField * upSampleRate
+                    tmpDefField = sampleImg(tmpDefField, upSampleRate)
+                    deformedLandMarks = self.deformLandmarks(data['landmarks'], data['image'], tmpDefField, dataloader.dataset.getSpacing(i),
+                                          dataloader.dataset.getOrigin(i), 
+                                          dataloader.dataset.getDirectionCosines(i))
+                    totalMeanPointDist = 0.0
+                    pp = PointProcessor()
+                    for landmarkChannel in range(-1, len(landmarksBeforeDeformation) - 1):
+                      meanPointDistance, _ = pp.calculatePointSetDistance(landmarksBeforeDeformation[landmarkChannel+1], deformedLandMarks[landmarkChannel], False)
+                      totalMeanPointDist += meanPointDistance
+                    lmDistance = totalMeanPointDist / float(len(landmarksBeforeDeformation))
+                    self.logFile.write(str(float(meanLoss)) + ';' + str(lmDistance) + ';' + str(patchIdx) + '\n')                  
+                  else:
+                    self.logFile.write(str(float(meanLoss)) + ';' + str(patchIdx) + '\n')
                   self.logFile.flush()
                   lossCounter = 0
+                  
+
+                  
                   if (iterationValidation(detachLoss, meanLoss, patchIteration, numberOfiterations, 0, lossTollerance)):
                     break
                 else:
