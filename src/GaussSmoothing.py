@@ -17,7 +17,7 @@ class GaussianSmoothing(nn.Module):
         dim (int, optional): The number of dimensions of the data.
             Default value is 2 (spatial).
     """
-    def __init__(self, channels, kernel_size, sigma, dim=2,device='cpu'):
+    def __init__(self, channels, kernel_size, sigma, dim, device):
         super(GaussianSmoothing, self).__init__()
         if isinstance(kernel_size, numbers.Number):
             kernel_size = [kernel_size] * dim
@@ -26,6 +26,12 @@ class GaussianSmoothing(nn.Module):
 
         # The gaussian kernel is the product of the
         # gaussian function of each dimension.
+        self.padVals = []
+        for ks in kernel_size:
+          padVal = int(ks / 2)
+          self.padVals.append(padVal)
+          self.padVals.append(padVal)
+        
         kernel = 1
         meshgrids = torch.meshgrid(
             [
@@ -36,7 +42,7 @@ class GaussianSmoothing(nn.Module):
         for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
             mean = (size - 1) / 2
             kernel *= 1 / (std * math.sqrt(2 * math.pi)) * \
-                      torch.exp(-((mgrid - mean) / (2 * std)) ** 2)
+                      torch.exp(-((mgrid - mean) / std) ** 2 / 2)
 
         # Make sure sum of values in gaussian kernel equals 1.
         kernel = kernel / torch.sum(kernel)
@@ -44,7 +50,6 @@ class GaussianSmoothing(nn.Module):
         # Reshape to depthwise convolutional weight
         kernel = kernel.view(1, 1, *kernel.size())
         kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
-        
         kernel = kernel.to(device)
         self.register_buffer('weight', kernel)
         self.groups = channels
@@ -60,7 +65,7 @@ class GaussianSmoothing(nn.Module):
                 'Only 1, 2 and 3 dimensions are supported. Received {}.'.format(dim)
             )
 
-    def forward(self, input):
+    def forward(self, inputArray):
         """
         Apply gaussian filter to input.
         Arguments:
@@ -68,4 +73,8 @@ class GaussianSmoothing(nn.Module):
         Returns:
             filtered (torch.Tensor): Filtered output.
         """
-        return self.conv(input, weight=self.weight, groups=self.groups)
+        ## padding deactivated as replicate padding has nondeterministic behaviour
+#         input = nn.functional.pad(input, self.padVals, "replicate")
+        return self.conv(inputArray, weight=self.weight, groups=self.groups)
+      
+      

@@ -1,14 +1,13 @@
-import getopt, sys, os
+import getopt, sys
 import SimpleITK as sitk
 import torch
 import numpy as np
 
-sys.path.insert(0,os.path.realpath('.'))
 import src.Utils
 
 def main(argv):
   try:
-    opts, args = getopt.getopt(argv, 'i:d:o:b', ['img=', 'defField=', 'output=', 'binary'])
+    opts, _ = getopt.getopt(argv, 'i:d:o:b', ['img=', 'defField=', 'output=', 'binary'])
   except getopt.GetoptError as e:#python3
     print(e)
     return
@@ -59,9 +58,11 @@ def main(argv):
     
 
     
-    deformedImage = src.Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
+    
     if isBinary:
-      deformedImage = deformedImage.round().short()
+      deformedImage = src.Utils.deformWithNearestNeighborInterpolation(imageTorch, defFieldTorch, 'cpu')
+    else:
+      deformedImage = src.Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
     deformedImageITK = sitk.GetImageFromArray(torch.tensor(deformedImage[0, 0, ],dtype=imageType))
     
     deformedImageITK.SetSpacing( imageSpacing )

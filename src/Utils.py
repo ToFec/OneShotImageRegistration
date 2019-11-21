@@ -76,7 +76,6 @@ def getZeroIdxField(imagShape, device):
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndices
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
-
 def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
   if useropts.useContext:
     if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape) or Context.imgDataDef[imgIdx].dtype != dataType:
@@ -169,14 +168,14 @@ def getLoss31(vecFieldShape, device):
   else:
     return torch.zeros(vecFieldShape, device=device, requires_grad=False)
 
-def smoothArray3D(inputArray, device, nrOfFilters=2, variance = 2, kernelSize = 5):
-    smoothing = GaussianSmoothing(1, kernelSize, variance, 3, device)
+def smoothArray3D(inputArray, nrOfFilters=2, variance = 2, kernelSize = 5):
+    smoothing = GaussianSmoothing(1, kernelSize, variance, 3)
     padVal = int(kernelSize / 2)
-    input = inputArray[None, None, ]
-    for i in range(0,nrOfFilters):
-      input = torch.nn.functional.pad(input, (padVal,padVal,padVal,padVal,padVal,padVal))
-      input = smoothing(input)
-    return input[0,0]
+    subInputArray = inputArray[None, None, ]
+    for _ in range(0,nrOfFilters):
+      subInputArray = torch.nn.functional.pad(subInputArray, (padVal,padVal,padVal,padVal,padVal,padVal))
+      subInputArray = smoothing(subInputArray)
+    return subInputArray[0,0]
   
 def getMaxIdxs(imgShape, imgPatchSize):
   if type(imgPatchSize) is list or type(imgPatchSize) is tuple:
@@ -262,7 +261,7 @@ def deformWithNearestNeighborInterpolation(imgToDef, defField, device):
   return deformed
   
 
-def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0, channelOffset = 1):
+def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=0):
   imgDataDef = getImgDataDef(imgDataToWork.shape, imgDataToWork.device, imgDataToWork.dtype, imgIdx)
   for chanIdx in range(-1, imgDataToWork.shape[1] - 1):
     imgToDef = imgDataToWork[:, None, chanIdx, ]
@@ -270,11 +269,11 @@ def deformWholeImage(imgDataToWork, addedField, nearestNeighbor = False, imgIdx=
     if nearestNeighbor:
       deformedTmp = deformWithNearestNeighborInterpolation(imgToDef, addedField[: , chanRange, ], imgDataToWork.device)        
     else:
-      deformedTmp = deformImage(imgToDef, addedField[: , chanRange, ], imgDataToWork.device, False)
-    imgDataDef[:, chanIdx + channelOffset, ] = deformedTmp[:, 0, ]
+      deformedTmp = deformImage(imgToDef, addedField[: , chanRange, ], imgDataToWork.device, False, nearestNeighbor)
+    imgDataDef[:, chanIdx + 1, ] = deformedTmp[:, 0, ]
   return imgDataDef
 
-def deformImage(imgToDef, defFields, device, detach=True):
+def deformImage(imgToDef, defFields, device, detach=True, NN=False, padMode='border'):
   zeroDefField = getZeroDefField(imgToDef.shape, device)
   currDefField = torch.empty(zeroDefField.shape, device=device, requires_grad=False)
   if (detach):
@@ -286,7 +285,10 @@ def deformImage(imgToDef, defFields, device, detach=True):
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
-  deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode='border')
+  if NN:
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode=padMode)
+  else:
+    deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode=padMode)
   return deformedTmp
 
 def getReceptiveFieldOffset(nuOfLayers):
@@ -360,12 +362,11 @@ def sampleImg(img, samplingRate):
   
 def getPaddedData(imgData, maskData, labelData, padVals):
   imgData = torch.nn.functional.pad(imgData, padVals, "constant", 0)
-  if (maskData.dim() == imgData.dim()):
+  if ((maskData is not None) and (maskData.dim() == imgData.dim())):
     maskData = maskData.float()
     maskData = torch.nn.functional.pad(maskData, padVals, "constant", 0)
     maskData = maskData.byte()
-  if (labelData.dim() == imgData.dim()):
-    labelData = labelData.float()
+  if ((labelData is not None) and (labelData.dim() == imgData.dim())):
     labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
     labelData = labelData.byte()
     
@@ -375,6 +376,8 @@ def save_grad(name):
   
   def hook(grad):
       print(name, np.float64(torch.sum(grad)))
+      print(name, np.float64(torch.min(grad)))
+      print(name, np.float64(torch.max(grad)))
 
   return hook
 
@@ -393,3 +396,6 @@ def combineDeformationFields(defField0, defField1, requiresGrad=False):
         xDef[:, channel, ] = deformedTmp[:, 0, ]
     defField0 = defField0.add(xDef)
   return defField0
+
+
+

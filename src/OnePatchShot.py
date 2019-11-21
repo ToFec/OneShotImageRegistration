@@ -10,10 +10,9 @@ from Optimize import Optimize
 
 import time
 
-from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor, SmoothImage
+from HeadAndNeckDataset import HeadAndNeckDataset, ToTensor
 from Net import UNet
 import Options as userOpts
-from __builtin__ import hasattr
 
 def main(argv):
   
@@ -22,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'noDiff', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -51,6 +50,8 @@ def main(argv):
       userOpts.downSampleSteps = int(arg)      
     elif opt == '--cycleW':
       userOpts.cycleW = float(arg)
+    elif opt == '--noDiff':
+      userOpts.diffeomorphicRegistration = False      
     elif opt == '--smoothW':
       stringList = arg.split()
       userOpts.smoothW = [float(i) for i in stringList]
@@ -71,6 +72,8 @@ def main(argv):
   torch.cuda.manual_seed(0)
   torch.backends.cudnn.deterministic = True
   torch.backends.cudnn.benchmark = False
+  if userOpts.debugMode:
+    torch.autograd.set_detect_anomaly(True)
 
   if not os.path.isdir(userOpts.outputPath):
     os.makedirs(userOpts.outputPath)
@@ -83,9 +86,7 @@ def main(argv):
   dataloader = DataLoader(headAndNeckTrainSet, batch_size=1,
                         shuffle=False, num_workers=0)
   
-
-  
-  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False, padImg=userOpts.usePaddedNet)
+  net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False)
   with Optimize(net, userOpts) as trainTestOptimize:
     print(net)
     start = time.time()

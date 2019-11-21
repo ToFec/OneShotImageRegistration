@@ -7,7 +7,6 @@ import numpy as np
 import Utils
 from eval.LandmarkHandler import PointReader
 import Options
-from Context import imgDataDef
 
 class HeadAndNeckDataset(Dataset):
     """Face Landmarks dataset."""
@@ -136,7 +135,7 @@ class HeadAndNeckDataset(Dataset):
           tmp = sitk.ReadImage(str(labelsFileName))
           labelsNii = sitk.GetArrayFromImage(tmp)
           labelData.append(labelsNii)
-        labelData = np.stack(labelData)
+        labelData = np.stack(labelData).astype('float32')
       
       maskData = []
       if (len(trainingFileNames) == len(maskFileNames)):
@@ -155,6 +154,9 @@ class HeadAndNeckDataset(Dataset):
         
       else:
         imgData = self.normalize(imgData, None, idx)
+      
+      if (len(labelsFileNames) > 0) and (len(labelsFileNames) == len(maskFileNames)):
+          labelData[maskData == 0] = 0
       
       imgData, maskData, labelData = self.getRightSizedData(imgData, maskData, labelData, idx)
       

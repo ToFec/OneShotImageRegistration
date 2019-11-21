@@ -1,28 +1,116 @@
 import torch
 import numpy as np
 import Utils
+import GaussSmoothing as gs
 
 class LossFunctions():
   
-  def __init__(self, imgDataToWork, defFields, currDefFields, spacing):
+  def __init__(self, imgDataToWork, spacing):
     self.imgData = imgDataToWork
+    self.defFields = None
+    self.currDefFields = None
+    self.dimWeight = spacing
+    self.initGaussKernels(imgDataToWork)
+    
+    
+  def initGaussKernels(self, imgDataToWork):
+    self.gaussSmothingKernels = []
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3,imgDataToWork.device))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3,imgDataToWork.device))
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
+    self.diceKernelMapping = {}
+
+  def update(self, imgDataToWork, defFields, currDefFields):
+    if self.imgData.shape != imgDataToWork.shape:
+      self.imgData = imgDataToWork
+      self.initGaussKernels(imgDataToWork)
+      
     self.defFields = defFields
     self.currDefFields = currDefFields
-    self.dimWeight = spacing
 
+  #only for 2 labels
   def dice_coeff(self, y_true, y_pred):
-    smooth = 1.
+    smooth = 0.000001
     # Flatten
     y_true_f = torch.reshape(y_true, (-1,))
     y_pred_f = torch.reshape(y_pred, (-1,))
     intersection = torch.sum(y_true_f * y_pred_f)
-    score = (2. * intersection + smooth) / (torch.sum(y_true_f) + torch.sum(y_pred_f) + smooth)
+    score = 2. * intersection / (torch.sum(y_true_f) + torch.sum(y_pred_f) + smooth)
     return score
 
 
   def dice_loss(self, y_true, y_pred):
       loss = 1 - self.dice_coeff(y_true, y_pred)
       return loss
+  
+  
+  
+#Generalised dice overlap as a deep learning loss function for highly unbalanced segmentations  
+  def multiLabelDiceLoss(self, y_true, deformationField, multiScale = False):
+    smooth = 0.0000000001
+    uniqueVals = torch.unique(y_true, sorted=True)
+    
+    denominator = 0.0
+    numerator = 0.0
+
+    for label in uniqueVals[1:]:
+      trueLabelVol = torch.zeros_like(y_true)
+      trueLabelVol[y_true == label ] = 1.0
+      defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1)
+
+      intersection = torch.sum(trueLabelVol * defLabelVol)
+      
+      labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
+      denominator = denominator + labelSum
+      numerator = numerator + intersection
+      
+    dice = 2. * numerator / (denominator + smooth)
+
+    loss =  1 - dice
+    if multiScale:
+      for gaussKernel in self.gaussSmothingKernels:
+        denominator = 0.0
+        numerator = 0.0
+        for label in uniqueVals[1:]:
+          if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(label):
+            trueLabelVol = self.diceKernelMapping[gaussKernel][label]
+          else:
+            trueLabelVol = torch.zeros_like(y_true)
+            trueLabelVol[y_true == label ] = 1.0
+            trueLabelVol = gaussKernel(trueLabelVol)
+            if self.diceKernelMapping.has_key(gaussKernel):
+              self.diceKernelMapping[gaussKernel][label] = trueLabelVol
+            else:
+              self.diceKernelMapping[gaussKernel] = {label: trueLabelVol}
+          
+          defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
+                                                                              int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
+                                                                              int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1)    
+          intersection = torch.sum(trueLabelVol * defLabelVol)
+          labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
+          denominator = denominator + labelSum
+          numerator = numerator + intersection
+        dice = 2. * numerator / (denominator + smooth)
+        loss = loss + (1 - dice)
+      return loss / (len(self.gaussSmothingKernels) + 1.0)
+    else:
+      return loss
+  
+    
+#     Weakly-supervised convolutional neural networks for multimodal image registration
+  def multiScaleDiceLoss(self, y_true, y_pred):
+    currDscLoss = self.dice_loss(y_true, y_pred)
+    for gaussKernel in self.gaussSmothingKernels:
+      if self.diceKernelMapping.has_key(gaussKernel):
+        trueSmooth = self.diceKernelMapping[gaussKernel]
+      else:
+        trueSmooth = gaussKernel(y_true)
+        self.diceKernelMapping[gaussKernel] = trueSmooth
+      predSmooth = gaussKernel(y_pred)
+      currDscLoss = currDscLoss + self.dice_loss(trueSmooth, predSmooth)
+      
+    return currDscLoss / (len(self.gaussSmothingKernels) + 1.0)
+      
 
   #TODO:   
   def cycleLoss(self, vecFields,outOfBoundsTensor, device0):
@@ -50,7 +138,7 @@ class LossFunctions():
     return loss.sum() / vecFields.shape[0]
   
 
-  def smoothBoundary(self, idx, device0):
+  def smoothBoundary(self, idx, device0, addedField):
     loss00 = torch.tensor(0.0, device=device0)
     loss01 =torch.tensor(0.0, device=device0)
     loss11= torch.tensor(0.0, device=device0)
@@ -58,7 +146,7 @@ class LossFunctions():
     loss20= torch.tensor(0.0, device=device0)
     loss21 = torch.tensor(0.0, device=device0)
     currDefFields = self.currDefFields
-    defFields = self.defFields
+    defFields = addedField
     if idx[0] > 0:
       loss000 = currDefFields[:,:,idx[0]-1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,0,:,:]
       loss001 = (currDefFields[:,:,idx[0]-1,idx[1]:idx[1]+defFields.shape[3],idx[2]:idx[2]+defFields.shape[4]] - defFields[:,:,1,:,:]) * 0.8
@@ -184,7 +272,7 @@ class LossFunctions():
       loss3 = self.getSmoothnessForDir3(imgIdx, device)
       
 #       loss[imgIdx] = torch.sum(loss0 + loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
-      loss[imgIdx] = torch.sum(loss1 + loss2 + loss3) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
+      loss[imgIdx] = torch.sum(torch.pow(loss1 + loss2 + loss3,2)) / (vecField.shape[1]*vecField.shape[2]*vecField.shape[3]*((vecField.shape[0]/3)-1))
      
     return loss.sum() / self.defFields.shape[0]
   

@@ -55,7 +55,6 @@ class UNet(nn.Module):
           offset += 2* power(offsetBase,2+j)
         self.receptiveFieldOffsets[i] = offset
     
-    
     self.reset_params()   
     
 
@@ -87,11 +86,12 @@ class UNet(nn.Module):
     
     x = torch.stack(outputFields)
     tmp = torch.sum(x, dim = 0)
+    
     return tmp
   
 
   def reset_params(self):
-    for i, m in enumerate(self.modules()):
+    for _, m in enumerate(self.modules()):
       if isinstance(m, nn.Conv3d):
         init.xavier_normal_(m.weight)
         init.constant_(m.bias, 0)

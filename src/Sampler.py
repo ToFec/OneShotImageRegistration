@@ -1,7 +1,7 @@
 import torch
 from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
 import numpy as np
-from Options import netDepth, netMinPatchSize, netMinPatchSizePadded, usePaddedNet
+from Options import netDepth, netMinPatchSize, netMinPatchSizePadded
 
 class Sampler(object):
 
@@ -112,7 +112,7 @@ class Sampler(object):
   
   def getIndicesForOneShotSampling(self, minusShift, medianSampler=True):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
-    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))
+    return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
   
   def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
@@ -157,10 +157,8 @@ class Sampler(object):
       iterateMethod = self.iterateImg
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
-       
-    leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
-    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
-    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
+    
+    leftover0, leftover1, leftover2 = self.getLeftovers(imgShape, patchShift)
     
     oldPatchSize = list(self.patchSizes)
     if leftover0 > 0:
@@ -212,6 +210,31 @@ class Sampler(object):
         idxs = idxs + iterateMethod((startidx0, 0, startidx2), patchShift, offset)
       
     return idxs
+        
+        
+  def getLeftovers(self, imgShape, patchShift):
+    if imgShape[2] <= self.patchSizes[0]:
+      leftover0 = 0
+    else:
+      leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
+      if leftover0 > 0:
+        leftover0 = leftover0 + self.patchSizes[0] - patchShift[0]
+    
+    if imgShape[3] <= self.patchSizes[1]:
+      leftover1 = 0
+    else:
+      leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1]
+      if leftover1 > 0:
+        leftover1 = leftover1 + self.patchSizes[1] - patchShift[1]
+      
+    if imgShape[4] <= self.patchSizes[2]:
+      leftover2 = 0
+    else:
+      leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2]
+      if leftover2 > 0:
+        leftover2 = leftover2 + self.patchSizes[2] - patchShift[2]
+        
+    return leftover0, leftover1, leftover2
             
   def getIndicesForUniformSamplingPathShift(self, patchShift, useMedian=True, offset=0):
     imgShape = self.imgData.shape
@@ -222,12 +245,11 @@ class Sampler(object):
       iterateMethod = self.iterateImgSum
       
     idxs = iterateMethod((0,0,0), patchShift, offset)
-       
-    leftover0 = (imgShape[2] - self.patchSizes[0]) % patchShift[0]
+    
+    leftover0, leftover1, leftover2 = self.getLeftovers(imgShape, patchShift)
+    
     startidx0 = imgShape[2] - self.patchSizes[0] if (leftover0 > 0) else 0
-    leftover1 = (imgShape[3] -self.patchSizes[1]) % patchShift[1] 
     startidx1 = imgShape[3] - self.patchSizes[1] if (leftover1 > 0) else 0
-    leftover2 = (imgShape[4] - self.patchSizes[2]) % patchShift[2] 
     startidx2 = imgShape[4] - self.patchSizes[2] if (leftover2 > 0) else 0
     
     if startidx0 > 0:
@@ -250,13 +272,9 @@ class Sampler(object):
   def getNextPatchSize(self, leftover):
     nuOfDownSampleLayers = netDepth - 1
     modValue = 2**(nuOfDownSampleLayers)
-    if not usePaddedNet:
-      leftover = leftover + 2*getReceptiveFieldOffset(netDepth)
-      minPatchSize = leftover if leftover > netMinPatchSize else netMinPatchSize
-    else:
-      minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
+    minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
     if minPatchSize % modValue != 0:
-      minPatchSize = (int(minPatchSize / modValue) * modValue)
+      minPatchSize = (int(np.ceil(minPatchSize / float(modValue))) * modValue)
     return minPatchSize
     
     
