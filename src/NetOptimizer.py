@@ -114,9 +114,24 @@ class NetOptimizer(object):
     cropStart1 = int((imgDataToWork.shape[3]-vecFields.shape[3])/2)
     cropStart2 = int((imgDataToWork.shape[4]-vecFields.shape[4])/2)
       
-    addedField = lastVecField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+    
+                               
+    if self.userOpts.addVectorFields:
+      addedField = lastVecField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
                                idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
                                idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]]+ vecFields
+    else:
+      tmpField = torch.zeros_like(lastVecField)
+      tmpField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+                               idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
+                               idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]] = tmpField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+                               idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
+                               idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]] + vecFields
+      tmpField = Utils.combineDeformationFields(tmpField, lastVecField)
+      addedField = tmpField[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
+                               idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
+                               idx[2]+cropStart2:idx[2]+cropStart2+vecFields.shape[4]]
+                               
       
     currVecFields[:, :, idx[0]+cropStart0:idx[0]+cropStart0+vecFields.shape[2],
                    idx[1]+cropStart1:idx[1]+cropStart1+vecFields.shape[3], 
@@ -124,7 +139,7 @@ class NetOptimizer(object):
 
     imgDataToWork = imgDataToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
     
-    lossCalculator.update(imgDataToWork, vecFields, currVecFields)
+    lossCalculator.update(imgDataToWork, addedField, currVecFields)
     
     smoothNessWeight = self.userOpts.smoothW[itIdx]
     crossCorrWeight = self.userOpts.ccW

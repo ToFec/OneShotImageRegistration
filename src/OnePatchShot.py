@@ -6,7 +6,7 @@ import os
 import sys, getopt
 import numpy as np
 
-from Optimize import Optimize
+from OptimizeCaller import OptimizeCaller
 
 import time
 
@@ -87,7 +87,7 @@ def main(argv):
                         shuffle=False, num_workers=0)
   
   net = UNet(headAndNeckTrainSet.getChannels(), True, False, userOpts.netDepth, userOpts.numberOfFiltersFirstLayer, useDeepSelfSupervision=False)
-  with Optimize(net, userOpts) as trainTestOptimize:
+  with OptimizeCaller(net, userOpts) as trainTestOptimize:
     print(net)
     start = time.time()
     if oldModelList is not None:

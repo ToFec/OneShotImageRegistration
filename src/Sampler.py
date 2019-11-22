@@ -113,6 +113,10 @@ class Sampler(object):
   def getIndicesForOneShotSampling(self, minusShift, medianSampler=True):
     patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
     return self.getIndicesForUniformSamplingPathShiftNoOverlap(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2))  
+
+  def getIndicesForOneShotSamplingOverlap(self, minusShift, medianSampler=True):
+    patchSizeMinusShift = (self.patchSizes[0] - minusShift[0], self.patchSizes[1] - minusShift[1], self.patchSizes[2] - minusShift[2])
+    return self.getIndicesForUniformSamplingPathShift(patchSizeMinusShift, useMedian=medianSampler, offset=int(minusShift[0]/2)) 
   
   def iterateImgMedian(self, startidx, shift, offset=0):
     idxs = []
