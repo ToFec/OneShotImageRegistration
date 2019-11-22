@@ -14,15 +14,13 @@ from Optimise import Optimise
 
 class OneShotOptimise(Optimise):
 
-    def __init__(self, data, net, userOpts):
+    def __init__(self, userOpts):
       Optimise.__init__(self, userOpts)
-      self.net = net
-      optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
-      self.netOptim = NetOptimizer.NetOptimizer(self.net, data['image'].shape[1]*3, optimizer, self.userOpts)
-      self.data = data
+      self.netOptim = None
+      self.data = None
       modValue = 2**(self.userOpts.netDepth - 1)
       
-      if self.userOpts.diffeomorphicRegistration:
+      if self.userOpts.overlappingPatches:
         self.patchShift = int(self.userOpts.finalGaussKernelSize/2)
         padVal = (int(np.ceil(self.patchShift / float(modValue))) * modValue)
         self.padVals = (padVal, padVal, padVal, padVal, padVal, padVal)
@@ -30,7 +28,6 @@ class OneShotOptimise(Optimise):
       else:
         self.samplerShift = (0,0,0)
         
-      self.samplingRates = self.getDownSampleRates()  
       if self.userOpts.trainTillConvergence:
         self.iterationValidation = self.terminateLoopByLossAndItCount
       else:
@@ -38,7 +35,7 @@ class OneShotOptimise(Optimise):
         
     
     
-    def runNoOverlap(self, spacing, samplingRates):
+    def runNoOverlap(self, spacing, samplingRates, resultModels):
       currVectorField = None
       for samplingRateIdx, samplingRate in enumerate(samplingRates):
         print('sampleRate: ', samplingRate)
@@ -53,8 +50,8 @@ class OneShotOptimise(Optimise):
         
         lastVectorField = currVectorField.clone()
         
-        if len(self.resultModels) > samplingRateIdx:
-            self.net.load_state_dict(self.resultModels[samplingRateIdx]['model_state'])
+        if len(resultModels) > samplingRateIdx:
+            self.net.load_state_dict(resultModels[samplingRateIdx]['model_state'])
         
         self.processPatchIdxNoOverlap(currVectorField, lastVectorField, idxs, samplingRateIdx, spacing, sampler)
   
@@ -114,12 +111,15 @@ class OneShotOptimise(Optimise):
             currVectorField = Utils.sampleImg(currVectorField, upSampleRate)
       return currVectorField    
       
-    def run(self, spacing):
-      samplingRates = self.getDownSampleRates()
-      if self.userOpts.diffeomorphicRegistration:
+    def run(self, net, data, spacing, samplingRates, resultModels = []):
+      self.net = net
+      self.data = data
+      optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
+      self.netOptim = NetOptimizer.NetOptimizer(self.net, data['image'].shape[1]*3, optimizer, self.userOpts)
+      if self.userOpts.overlappingPatches:
         return self.runOverlap(spacing, samplingRates)
       else:
-        return self.runNoOverlap(spacing, samplingRates)
+        return self.runNoOverlap(spacing, samplingRates, resultModels)
 
     def processPatchIdxNoOverlap(self, currVectorField, lastVectorField, idxs, samplingRateIdx, spacing, sampler):
       for patchIdx, idx in enumerate(idxs):

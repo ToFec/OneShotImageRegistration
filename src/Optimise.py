@@ -6,6 +6,8 @@ Created on Nov 22, 2019
 import numpy as np
 import torch
 import os
+from Sampler import Sampler
+import Utils
 
 class Optimise(object):
     '''
@@ -13,22 +15,29 @@ class Optimise(object):
     '''
     def __init__(self, userOpts):
       self.userOpts = userOpts
+      self.net = None
       logfileName = self.userOpts.outputPath + os.path.sep + 'lossLog.csv'
       self.logFile = open(logfileName,'w')
       self.logFile.write('PatchIdx;Loss;CrossCorr;DSC;Smmoth;Cycle\n')
       self.logFile.flush()
       self.finalNumberIterations = [0,0]
-      self.resultModels = []
       
     def __exit__(self, exc_type, exc_value, traceback):
       self.logFile.close()      
         
-    def getDownSampleRates(self):
-      samplingRates = np.ones(self.userOpts.downSampleSteps + 1)     
-      for samplingRateIdx in range(0,self.userOpts.downSampleSteps):
-        samplingRates[samplingRateIdx] = 1.0 / (2**(self.userOpts.downSampleSteps-samplingRateIdx))
-      return samplingRates[0:self.userOpts.stoptAtSampleStep]
-    
+        
+    def getDeformationField(self, imageData, samplingRate, patchSize, useMedianSampling, samplerShift):
+      sampledValidationImgData, sampledValidationMaskData, sampledValidationLabelData, _ = Utils.sampleImgData(imageData, samplingRate)
+      validationSampler = Sampler(sampledValidationMaskData, sampledValidationImgData, sampledValidationLabelData, patchSize) 
+      idxs = validationSampler.getIndicesForOneShotSampling(samplerShift, useMedianSampling)
+      currValidationField = torch.zeros((sampledValidationImgData.shape[0], sampledValidationImgData.shape[1] * 3, sampledValidationImgData.shape[2], sampledValidationImgData.shape[3], sampledValidationImgData.shape[4]), device=self.userOpts.device, requires_grad=False)
+      for _ , idx in enumerate(idxs):
+        validationImageSample = validationSampler.getSubSampleImg(idx, self.userOpts.normImgPatches)
+        validationImageSample = validationImageSample.to(self.userOpts.device)
+        defField = self.net(validationImageSample)
+        currValidationField[:, :, idx[0]:idx[0]+validationImageSample.shape[2], idx[1]:idx[1]+validationImageSample.shape[3], idx[2]:idx[2]+validationImageSample.shape[4]] = defField
+      return currValidationField
+        
     def terminateLoopByLoss(self, loss, meanLoss, currIteration, itThreshold, iterIdx, tollerance):
       if (torch.abs(meanLoss - loss) < tollerance):
         self.finalLoss = loss

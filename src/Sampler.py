@@ -1,7 +1,7 @@
 import torch
-from Utils import getMaxIdxs, getPatchSize, normalizeImg, getReceptiveFieldOffset
+from Utils import getMaxIdxs, getPatchSize, normalizeImg
 import numpy as np
-from Options import netDepth, netMinPatchSize, netMinPatchSizePadded
+from Options import netDepth, netMinPatchSizePadded
 
 class Sampler(object):
 

@@ -5,6 +5,7 @@ from GaussSmoothing import GaussianSmoothing
 import Context
 import pickle
 import Options as useropts
+from eval.LandmarkHandler import PointProcessor
 
 def deform(inputVol, x1, y1, z1):
   ##http://simpleitk.github.io/SimpleITK-Notebooks/01_Image_Basics.html
@@ -24,6 +25,11 @@ def deform(inputVol, x1, y1, z1):
   deformedVol = sitk.GetArrayFromImage(moving) 
   
   return deformedVol
+
+  upSampleRate = 1.0 / samplingRate
+  currValidationField = currValidationField * upSampleRate
+  currValidationField = sampleImg(currValidationField, upSampleRate)
+  return currValidationField
 
 def getDefField(x1, y1, z1):
   defField = np.stack([x1, y1, z1])
@@ -354,6 +360,30 @@ def sampleImgData(data, samplingRate):
       labelData = labelDataOrig
     
     return (imgData, maskData, labelData, landmarkData)
+  
+def deformLandmarks(self, landmarkData, image, defField, spacing, origin, cosines):
+  if (len(landmarkData) > 0):
+    pp = PointProcessor()
+    deformedlandmarkData = list(landmarkData)
+    for imgIdx in range(image.shape[0]):
+      for chanIdx in range(-1, image.shape[1] - 1):
+        dataSetSpacing = spacing
+        dataSetDirCosines = cosines
+        defX = defField[imgIdx, chanIdx * 3, ].detach() * dataSetSpacing[0] * dataSetDirCosines[0]
+        defY = defField[imgIdx, chanIdx * 3 + 1, ].detach() * dataSetSpacing[1] * dataSetDirCosines[4]
+        defZ = defField[imgIdx, chanIdx * 3 + 2, ].detach() * dataSetSpacing[2] * dataSetDirCosines[8]
+        defFieldPerturbated = getDefField(defX, defY, defZ)
+        defFieldPerturbated = np.moveaxis(defFieldPerturbated, 0, 2)
+        defFieldPerturbated = np.moveaxis(defFieldPerturbated, 0, 1)
+        defFieldPerturbated = torch.from_numpy(defFieldPerturbated)
+        currLandmarks = landmarkData[chanIdx + 1] ##the def field points from output to input therefore we need no take the next landmarks to be able to deform them
+        defFieldOrigin = origin
+        deformedPoints = pp.deformPointsWithField(currLandmarks, defFieldPerturbated, defFieldOrigin, dataSetSpacing, dataSetDirCosines)
+        deformedlandmarkData[chanIdx + 1]=deformedPoints
+    deformedData=deformedlandmarkData
+  else:
+    deformedData=[]   
+  return deformedData 
   
 def sampleImg(img, samplingRate):
   if samplingRate != 1.0:
