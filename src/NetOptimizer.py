@@ -170,8 +170,8 @@ class NetOptimizer(object):
     
     diceLoss = torch.tensor(0.0,device=self.userOpts.device)
     if labelToWork is not None and dscWeight > 0.0:
-      labelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
-      diceLoss = lossCalculator.multiLabelDiceLoss(labelToWork, deformationField, False)
+      sublabelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
+      diceLoss = lossCalculator.multiLabelDiceLoss(sublabelToWork, deformationField, True)
 
     loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
     if printLoss:

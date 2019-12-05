@@ -21,7 +21,7 @@ def main(argv):
   callString = 'OnePatchShot.py --trainingFiles=files.csv --device=device --outputPath=PATH'
   
   try:
-    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'noDiff', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW='])
+    opts, args = getopt.getopt(argv, '', ['trainingFiles=', 'testModels', 'fineTune=', 'randomSampling=', 'validationFiles=', 'previousModels=', 'device=', 'maskOutZeros', 'noDiff', 'outputPath=', 'stoptAtSampleStep=', 'downSampleSteps=', 'cycleW=', 'smoothW=', 'boundarySmoothW='])
   except getopt.GetoptError as e:#python3
     print(e)
     print(callString)
@@ -51,10 +51,14 @@ def main(argv):
     elif opt == '--cycleW':
       userOpts.cycleW = float(arg)
     elif opt == '--noDiff':
-      userOpts.diffeomorphicRegistration = False      
+      userOpts.diffeomorphicRegistration = False  
+      userOpts.overlappingPatches = False    
     elif opt == '--smoothW':
       stringList = arg.split()
       userOpts.smoothW = [float(i) for i in stringList]
+    elif opt == '--boundarySmoothW':
+      stringList = arg.split()
+      userOpts.boundarySmoothnessW = [float(i) for i in stringList]
     elif opt == '--previousModels':
       oldModelList = arg.split()
     elif opt == '--testModels':

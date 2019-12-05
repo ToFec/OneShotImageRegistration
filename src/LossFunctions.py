@@ -17,7 +17,7 @@ class LossFunctions():
     self.gaussSmothingKernels = []
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3,imgDataToWork.device))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3,imgDataToWork.device))
-    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
+#     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
     self.diceKernelMapping = {}
 
   def update(self, imgDataToWork, defFields, currDefFields):
@@ -50,19 +50,21 @@ class LossFunctions():
     smooth = 0.0000000001
     uniqueVals = torch.unique(y_true, sorted=True)
     
-    denominator = 0.0
-    numerator = 0.0
+    denominator = torch.tensor(0.0, device=deformationField.device)
+    numerator = torch.tensor(0.0, device=deformationField.device)
 
+    idx = 0
     for label in uniqueVals[1:]:
       trueLabelVol = torch.zeros_like(y_true)
       trueLabelVol[y_true == label ] = 1.0
-      defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1)
+      defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1 + idx)
 
       intersection = torch.sum(trueLabelVol * defLabelVol)
       
       labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
       denominator = denominator + labelSum
       numerator = numerator + intersection
+      idx = idx + 1
       
     dice = 2. * numerator / (denominator + smooth)
 
@@ -85,11 +87,12 @@ class LossFunctions():
           
           defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
                                                                               int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
-                                                                              int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1)    
+                                                                              int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1 + idx)    
           intersection = torch.sum(trueLabelVol * defLabelVol)
           labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
           denominator = denominator + labelSum
           numerator = numerator + intersection
+          idx = idx + 1
         dice = 2. * numerator / (denominator + smooth)
         loss = loss + (1 - dice)
       return loss / (len(self.gaussSmothingKernels) + 1.0)

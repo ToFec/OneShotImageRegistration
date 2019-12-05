@@ -29,7 +29,7 @@ dscWeight=0.0
 downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
 stoptAtSampleStep=3
 boundarySmoothnessW=(0.0,0.1,0.1)
-smoothW = (0.0001,0.0001,0.0001)
+smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01
 lossTollerance=0.00001
 
@@ -41,7 +41,7 @@ overlappingPatches=True
 finalGaussKernelSize=7
 finalGaussKernelStd=2
 sasSteps=5
-smoothVF = True
+smoothVF = True #if true then the smoothness function of smoothW loss is used
 
 
 #
@@ -49,7 +49,7 @@ smoothVF = True
 #
 validationIntervall=10
 # numberOfEpochs = [75,75,75]
-addVectorFields=True
+addVectorFields=False
 fineTuneOldModel=(False, False, False) # works only in combination with "previousModels" parameter
 randomSampling=(False,False,False)
 

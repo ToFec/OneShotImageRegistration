@@ -5,7 +5,6 @@ class SelfSupervisionBrick(nn.Module):
   def __init__(self ,num_filters, in_channels=2, upSampletimes=0, padImg=True):
       super(SelfSupervisionBrick, self).__init__()
       
-      
       self.conv = nn.Conv3d(in_channels, num_filters * 3, 1)
       self.upSampletimes = upSampletimes
       self.padImg = padImg

@@ -26,11 +26,6 @@ def deform(inputVol, x1, y1, z1):
   
   return deformedVol
 
-  upSampleRate = 1.0 / samplingRate
-  currValidationField = currValidationField * upSampleRate
-  currValidationField = sampleImg(currValidationField, upSampleRate)
-  return currValidationField
-
 def getDefField(x1, y1, z1):
   defField = np.stack([x1, y1, z1])
   defField = np.moveaxis(defField, 0, -1)
@@ -64,7 +59,7 @@ def getZeroIdxFieldImg(imagShape, device):
       return [idxs0, idxs1, idxs2, idxs3, idxs4]
     Context.zeroIndicesImg = [idxs0, idxs1, idxs2, idxs3, idxs4]
   [idxs0, idxs1, idxs2, idxs3, idxs4] = Context.zeroIndicesImg
-  return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
+  return [idxs0.clone().to(device), idxs1.clone().to(device), idxs2.clone().to(device), idxs3.clone().to(device), idxs4.clone().to(device)]
 
 #for deffields
 def getZeroIdxField(imagShape, device):
@@ -291,7 +286,7 @@ def deformImage(imgToDef, defFields, device, detach=True, NN=False, padMode='bor
     currDefField[..., 0] = zeroDefField[..., 0] + defFields[:, 0, ] / ((imgToDef.shape[4]-1) / 2.0)
     currDefField[..., 1] = zeroDefField[..., 1] + defFields[:, 1, ] / ((imgToDef.shape[3]-1) / 2.0)
     currDefField[..., 2] = zeroDefField[..., 2] + defFields[:, 2, ] / ((imgToDef.shape[2]-1) / 2.0)
-  if NN:
+  if NN: #needs pytorch > 1.0
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='nearest', padding_mode=padMode)
   else:
     deformedTmp = torch.nn.functional.grid_sample(imgToDef, currDefField, mode='bilinear', padding_mode=padMode)
@@ -349,9 +344,9 @@ def sampleImgData(data, samplingRate):
       else:
         maskData = maskDataOrig
       if (labelDataOrig.dim() == imgDataOrig.dim()):
-        labelDataOrig = labelDataOrig.float()
+#         labelDataOrig = labelDataOrig.float()
         labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
-        labelData = labelData.byte()
+#         labelData = labelData.byte()
       else:
         labelData = labelDataOrig
     else:
@@ -398,7 +393,7 @@ def getPaddedData(imgData, maskData, labelData, padVals):
     maskData = maskData.byte()
   if ((labelData is not None) and (labelData.dim() == imgData.dim())):
     labelData = torch.nn.functional.pad(labelData, padVals, "constant", 0)
-    labelData = labelData.byte()
+#     labelData = labelData.byte()
     
   return (imgData, maskData, labelData)
 
