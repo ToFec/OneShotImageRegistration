@@ -15,8 +15,8 @@ class LossFunctions():
     
   def initGaussKernels(self, imgDataToWork):
     self.gaussSmothingKernels = []
+    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 7, 2,3,imgDataToWork.device))
     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 13, 4,3,imgDataToWork.device))
-    self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 25, 8,3,imgDataToWork.device))
 #     self.gaussSmothingKernels.append(gs.GaussianSmoothing(imgDataToWork.shape[1], 49, 16,3,imgDataToWork.device))
     self.diceKernelMapping = {}
 
