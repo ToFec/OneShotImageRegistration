@@ -24,7 +24,10 @@ class Optimise(object):
       
     def __exit__(self, exc_type, exc_value, traceback):
       self.logFile.close()      
-        
+
+    def __enter__(self):
+      return self
+
         
     def getDeformationField(self, imageData, samplingRate, patchSize, useMedianSampling, samplerShift):
       sampledValidationImgData, sampledValidationMaskData, sampledValidationLabelData, _ = Utils.sampleImgData(imageData, samplingRate)

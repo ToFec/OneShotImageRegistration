@@ -412,7 +412,7 @@ def combineDeformationFields(defField0, defField1, requiresGrad=False):
     defField0 = defField0 + defField1
   else:
     xDef = torch.empty(defField0.shape, device=defField0.device, requires_grad=requiresGrad)
-    for chanIdx in range(-1, (defField0.shape[1]/3) - 1):
+    for chanIdx in range(-1, int(defField0.shape[1]/3) - 1):
       chanRange = range(chanIdx * 3, chanIdx * 3 + 3)
       for channel in chanRange:
         imgToDef = defField1[:, None, channel, ]                

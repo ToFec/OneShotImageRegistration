@@ -243,62 +243,62 @@ class OptimizeCaller():
         self.userOpts.useContext = useContext
     
   def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
-    trainOptimiser = TrainOptimise(self.net, self.userOpts)
-    samplingRates = self.getDownSampleRates()
-    for samplingRateIdx, samplingRate in enumerate(samplingRates):
-      self.resetNet()
-      if len(self.resultModels) > samplingRateIdx:
-        print("found model for saplingrate: " + str(samplingRate))
-        if self.userOpts.fineTuneOldModel[samplingRateIdx]:
-          print("finetuning model for saplingrate: " + str(samplingRate))
-          resultModelsBUP = self.resultModels
-          self.resultModels = self.resultModels[0:samplingRateIdx]
-          self.net.load_state_dict(resultModelsBUP[samplingRateIdx]['model_state'])
-          trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
-          self.resultModels = resultModelsBUP
-          self.resultModels[samplingRateIdx] = {'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())}
-          torch.save({
-          'model_state_dict': self.net.state_dict(),
-          'samplingRate': samplingRate
-          }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
-        else:
-          continue
-      else:
-        print("train model for saplingrate: " + str(samplingRate))
-        trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
-        self.resultModels.append({'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())})
-        torch.save({
-          'model_state_dict': self.net.state_dict(),
-          'samplingRate': samplingRate
-          }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
-     
+    with TrainOptimise(self.net, self.userOpts) as trainOptimiser:
+        samplingRates = self.getDownSampleRates()
+        for samplingRateIdx, samplingRate in enumerate(samplingRates):
+          self.resetNet()
+          if len(self.resultModels) > samplingRateIdx:
+            print("found model for saplingrate: " + str(samplingRate))
+            if self.userOpts.fineTuneOldModel[samplingRateIdx]:
+              print("finetuning model for saplingrate: " + str(samplingRate))
+              resultModelsBUP = self.resultModels
+              self.resultModels = self.resultModels[0:samplingRateIdx]
+              self.net.load_state_dict(resultModelsBUP[samplingRateIdx]['model_state'])
+              trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
+              self.resultModels = resultModelsBUP
+              self.resultModels[samplingRateIdx] = {'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())}
+              torch.save({
+              'model_state_dict': self.net.state_dict(),
+              'samplingRate': samplingRate
+              }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
+            else:
+              continue
+          else:
+            print("train model for saplingrate: " + str(samplingRate))
+            trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
+            self.resultModels.append({'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())})
+            torch.save({
+              'model_state_dict': self.net.state_dict(),
+              'samplingRate': samplingRate
+              }, self.userOpts.outputPath + os.path.sep + 'finalModel'+str(samplingRateIdx)+'.pt')
+         
   def trainTestNetDownSamplePatch(self, dataloader):
 
-      oneShotOptimiser = OneShotOptimise(self.userOpts) 
-      samplingRates = self.getDownSampleRates()     
-      for i, data in enumerate(dataloader, 0):
-        torch.manual_seed(0)
-        torch.cuda.manual_seed(0)
-        np.random.seed(0)
-        self.net.reset_params()
-        self.net.train()
-        start = time.time()
-        
-        currVectorField = oneShotOptimiser.run(self.net, data, dataloader.dataset.getSpacingXZFlip(i), samplingRates)
-        
+      with OneShotOptimise(self.userOpts) as oneShotOptimiser:
+          samplingRates = self.getDownSampleRates()     
+          for i, data in enumerate(dataloader, 0):
+            torch.manual_seed(0)
+            torch.cuda.manual_seed(0)
+            np.random.seed(0)
+            self.net.reset_params()
+            self.net.train()
+            start = time.time()
+            
+            currVectorField = oneShotOptimiser.run(self.net, data, dataloader.dataset.getSpacingXZFlip(i), samplingRates)
+            
+                  
+            end = time.time()
+            print('Registration of dataset %i took:' % (i), end - start, 'seconds')
+            with torch.no_grad():
               
-        end = time.time()
-        print('Registration of dataset %i took:' % (i), end - start, 'seconds')
-        with torch.no_grad():
-          
-          if self.userOpts.diffeomorphicRegistration:
-            currVectorField = currVectorField.to('cpu') # for big datasets we run out of memory when scaling and squaring is run on gpu
-            scalingSquaring = sas.ScalingAndSquaring(self.userOpts.sasSteps)
-            deformationField = scalingSquaring(currVectorField)
-            deformationField = deformationField.to(self.userOpts.device)
-          else:
-            currVectorField = currVectorField.to(self.userOpts.device)
-            deformationField = currVectorField
-          
-          self.saveResults(data, deformationField, dataloader, i)                  
+              if self.userOpts.diffeomorphicRegistration:
+                currVectorField = currVectorField.to('cpu') # for big datasets we run out of memory when scaling and squaring is run on gpu
+                scalingSquaring = sas.ScalingAndSquaring(self.userOpts.sasSteps)
+                deformationField = scalingSquaring(currVectorField)
+                deformationField = deformationField.to(self.userOpts.device)
+              else:
+                currVectorField = currVectorField.to(self.userOpts.device)
+                deformationField = currVectorField
+              
+              self.saveResults(data, deformationField, dataloader, i)                  
 

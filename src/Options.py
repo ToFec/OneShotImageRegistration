@@ -49,7 +49,7 @@ smoothVF = True #if true then the smoothness function of smoothW loss is used
 #
 validationIntervall=10
 # numberOfEpochs = [75,75,75]
-addVectorFields=True
+addVectorFields=False
 fineTuneOldModel=(False, False, False) # works only in combination with "previousModels" parameter
 randomSampling=(False,False,False)
 
