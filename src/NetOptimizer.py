@@ -79,7 +79,7 @@ class NetOptimizer(object):
   def getCycleImageData(self, addedField):
     cycleImgData = Utils.getCycleImgData(addedField.shape, self.userOpts.device)#torch.empty(defFields.shape, device=self.userOpts.device)
     zeroIndices = Utils.getZeroIdxField(addedField.shape, self.userOpts.device)
-    if int(torch.__version__[0]) < 1.2:
+    if float(torch.__version__[0:3]) < 1.2:
       outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.uint8, device=self.userOpts.device)
     else:
      outOfBoundsTensor = torch.zeros(zeroIndices[0].shape,dtype=torch.bool, device=self.userOpts.device)
