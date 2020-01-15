@@ -31,7 +31,7 @@ stoptAtSampleStep=3
 boundarySmoothnessW=(0.0,0.1,0.1)
 smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01
-lossTollerance=0.0000001
+lossTollerance=0.0000001#0.00001#
 
 #
 #difeomorphic version parameters
