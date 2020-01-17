@@ -2,7 +2,7 @@ import sys
 import getopt
 import SimpleITK as sitk
 import numpy as np
-from src import Utils
+from OneShotImageRegistration.src import Utils
 import torch
 
 
@@ -130,7 +130,28 @@ def invertDirectionOfField(defField):
   return newField
           
           
-                                                                        
+def combineDeformationFields(filenames):
+  oldNet = None
+  for filename in filenames:
+    defFieldITK = sitk.ReadImage(str(filename))
+    defFieldSpacing = defFieldITK.GetSpacing()
+    defFieldOrigin = defFieldITK.GetOrigin()
+    defFieldDirection = defFieldITK.GetDirection()
+    
+    defField = sitk.GetArrayFromImage(defFieldITK)
+    defField[...,0] = (defField[...,0] / defFieldSpacing[0]) * defFieldDirection[0]
+    defField[...,1] = (defField[...,1] / defFieldSpacing[1]) * defFieldDirection[4]
+    defField[...,2] = (defField[...,2] / defFieldSpacing[2]) * defFieldDirection[8]
+    
+    defField = np.moveaxis(defField, -1, 0)
+    defField = np.expand_dims(defField, axis=0)
+    defField = torch.from_numpy(defField)
+    if oldNet is None:
+      oldNet = defField
+    else:
+      oldNet = Utils.combineDeformationFields(defField, oldNet)
+  
+  return oldNet, defFieldSpacing, defFieldOrigin, defFieldDirection                                                          
 
 def main(argv=None): # IGNORE:C0111
   try:
@@ -151,25 +172,8 @@ def main(argv=None): # IGNORE:C0111
       
 
   if filenames is not None:
-    oldNet = None
-    for filename in filenames:
-      defFieldITK = sitk.ReadImage(str(filename))
-      defFieldSpacing = defFieldITK.GetSpacing()
-      defFieldOrigin = defFieldITK.GetOrigin()
-      defFieldDirection = defFieldITK.GetDirection()
-      
-      defField = sitk.GetArrayFromImage(defFieldITK)
-      defField[...,0] = (defField[...,0] / defFieldSpacing[0]) * defFieldDirection[0]
-      defField[...,1] = (defField[...,1] / defFieldSpacing[1]) * defFieldDirection[4]
-      defField[...,2] = (defField[...,2] / defFieldSpacing[2]) * defFieldDirection[8]
-      
-      defField = np.moveaxis(defField, -1, 0)
-      defField = np.expand_dims(defField, axis=0)
-      defField = torch.from_numpy(defField)
-      if oldNet is None:
-        oldNet = defField
-      else:
-        oldNet = Utils.combineDeformationFields(defField, oldNet)
+    oldNet, defFieldSpacing, defFieldOrigin, defFieldDirection  = combineDeformationFields(filenames)
+    
     
     if oldNet is not None:
       if invertField:
