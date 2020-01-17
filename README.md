@@ -6,6 +6,8 @@ a description of this work can be found here: https://arxiv.org/abs/1907.04641
 **to start a registration call:**
 python src/OnePatchShot.py --trainingFiles=PATH_TO_INPUT_CSV_FILE  --outputPath=OUTPUT_PATH
 
+_the refactored version of the code allows the user to use the net not only in a one-shot fashion but also to train and test the network in a conventional way, to fine-tune existing models (for a few-shot approach) and to enable diffeomorphic registration. a detailed description how to use those features will follow soon._
+
 the input csv file contains a list of folders; each folder represents a separate registration task; the image files in the folders must follow the following naming scheme: 
 
 * first image: img0.FILE_FORMAT
