@@ -6,6 +6,7 @@ from OneShotImageRegistration.src import Utils
 import torch
 
 
+# TODO: really slow at the moment; vectorize!
 def invertDirectionOfField(defField):
   fieldShape = defField.shape[2:]
   nuOfItems=fieldShape[0]*fieldShape[1]*fieldShape[2]
@@ -13,8 +14,6 @@ def invertDirectionOfField(defField):
   for idx0 in range(fieldShape[0]):
     for idx1 in range(fieldShape[1]):
       for idx2 in range(fieldShape[2]):
-        if idx0 == 30 and idx1 == 30 and idx2 == 40:
-          i = 1 +1
         defVec = defField[0, :, idx0, idx1, idx2]
         newPos0 = idx0+defVec[2]
         if newPos0 < 0:
@@ -102,8 +101,6 @@ def invertDirectionOfField(defField):
   for idx0 in range(fieldShape[0]):
     for idx1 in range(fieldShape[1]):
       for idx2 in range(fieldShape[2]):
-        if idx0 == 30 and idx1 == 30 and idx2 == 55:
-          i = 1 +1
         
         idx = idx0 + idx1 * fieldShape[0] + idx2 * fieldShape[0] * fieldShape[1]
         vectorParsList = vectorList[idx]
