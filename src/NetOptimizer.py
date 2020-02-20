@@ -168,13 +168,13 @@ class NetOptimizer(object):
     imgDataDef = Utils.deformWholeImage(imgDataToWork, deformationField)
     cycleImgData, outOfBoundsTensor = self.getCycleImageData(deformationField)
    
-    crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device)
+    crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device, self.userOpts.valueToIgnore)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
     diceLoss = torch.tensor(0.0,device=self.userOpts.device)
     if labelToWork is not None and dscWeight > 0.0:
       sublabelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
-      diceLoss = lossCalculator.multiLabelDiceLoss(sublabelToWork, deformationField, True)
+      diceLoss = lossCalculator.multiLabelDiceLoss(sublabelToWork, deformationField, True, self.userOpts.valueToIgnore)
 
     loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
     if printLoss:

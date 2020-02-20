@@ -336,7 +336,13 @@ def sampleImgData(data, samplingRate):
     maskDataOrig = data['mask']
     landmarkData = data['landmarks']
     if samplingRate < 1:
+
       imgData = torch.nn.functional.interpolate(imgDataOrig,scale_factor=samplingRate,mode='trilinear')
+      if useropts.valueToIgnore is not None:
+        boolValToIgnore = torch.zeros_like(imgDataOrig)
+        boolValToIgnore[imgDataOrig == useropts.valueToIgnore] = 1.0
+        boolValToIgnore = torch.nn.functional.interpolate(boolValToIgnore, scale_factor=samplingRate, mode='trilinear')
+        imgData[boolValToIgnore > 0] = useropts.valueToIgnore
       if (maskDataOrig.dim() == imgDataOrig.dim()):
         maskDataOrig = maskDataOrig.float()
         maskData = torch.nn.functional.interpolate(maskDataOrig, scale_factor=samplingRate, mode='nearest')

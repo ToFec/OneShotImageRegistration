@@ -182,7 +182,10 @@ class HeadAndNeckDataset(Dataset):
           imgData = imgData - imgMean
           imgStd = imgData[maskData > 0].std()
           imgData = imgData / imgStd
-          imgData[maskData == 0] = 0
+          if Options.valueToIgnore is not None:
+            imgData[maskData == 0] = Options.valueToIgnore
+          else:
+            imgData[maskData == 0] = 0
           self.meansAndStds[idx] = (imgMean, imgStd)        
         else:
           imgMean = imgData.mean()

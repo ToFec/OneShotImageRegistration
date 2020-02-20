@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import Utils
 import GaussSmoothing as gs
+from Options import valueToIgnore
 
 class LossFunctions():
   
@@ -46,17 +47,27 @@ class LossFunctions():
   
   
 #Generalised dice overlap as a deep learning loss function for highly unbalanced segmentations  
-  def multiLabelDiceLoss(self, y_true, deformationField, multiScale = False):
+  def multiLabelDiceLoss(self, y_true, deformationField, multiScale = False, valueToIgnore = None):
     smooth = 0.0000000001
     uniqueVals = torch.unique(y_true, sorted=True)
     
     denominator = torch.tensor(0.0, device=deformationField.device)
     numerator = torch.tensor(0.0, device=deformationField.device)
 
+    if valueToIgnore is not None:
+      valsEuqalIgnoreVal = self.imgData == valueToIgnore
+      valsEuqalIgnoreVal = torch.sum(valsEuqalIgnoreVal, 1)
+      valsEuqalIgnoreVal = valsEuqalIgnoreVal.repeat(1,self.imgData.shape[1],1,1,1)
+
     idx = 0
     for label in uniqueVals[1:]:
       trueLabelVol = torch.zeros_like(y_true)
-      trueLabelVol[y_true == label ] = 1.0
+      if valueToIgnore is not None:
+        boolArray0 = y_true == label
+        boolArray1 = valsEuqalIgnoreVal == 0
+        trueLabelVol[ boolArray0 & boolArray1] = 1.0
+      else:
+        trueLabelVol[y_true == label ] = 1.0
       defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField, False, 1 + idx)
 
       intersection = torch.sum(trueLabelVol * defLabelVol)
@@ -78,7 +89,12 @@ class LossFunctions():
             trueLabelVol = self.diceKernelMapping[gaussKernel][label]
           else:
             trueLabelVol = torch.zeros_like(y_true)
-            trueLabelVol[y_true == label ] = 1.0
+            if valueToIgnore is not None:
+              boolArray0 = y_true == label
+              boolArray1 = valsEuqalIgnoreVal == 0
+              trueLabelVol[ boolArray0 & boolArray1] = 1.0              
+            else:
+              trueLabelVol[y_true == label ] = 1.0            
             trueLabelVol = gaussKernel(trueLabelVol)
             if self.diceKernelMapping.has_key(gaussKernel):
               self.diceKernelMapping[gaussKernel][label] = trueLabelVol
@@ -280,14 +296,19 @@ class LossFunctions():
     return loss.sum() / self.defFields.shape[0]
   
   ## images must have the same shape
-  def normCrossCorr(self, defImg, device0):
+  def normCrossCorr(self, defImg, device0, valueToIgnore = None):
     results = torch.empty(self.imgData.shape[0]*self.imgData.shape[1], device=device0)
     for imgIdx in range(self.imgData.shape[0]):
       for chanIdx in range(self.imgData.shape[1]):
         x = self.imgData[imgIdx, chanIdx,]
-        y = defImg[imgIdx, chanIdx,]
-        x = torch.reshape(x, (-1,))
-        y = torch.reshape(y, (-1,))
+        y = defImg[imgIdx, chanIdx,]        
+        if valueToIgnore is not None:
+          valuesToConsider = (x != valueToIgnore) & (y != valueToIgnore)
+          x = x[valuesToConsider]
+          y = y[valuesToConsider]
+        else:
+          x = torch.reshape(x, (-1,))
+          y = torch.reshape(y, (-1,))
         x = torch.nn.functional.normalize(x,2,-1)
         y = torch.nn.functional.normalize(y,2,-1)
         dotProd = torch.dot(x,y) + 1

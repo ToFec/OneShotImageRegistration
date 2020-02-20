@@ -27,11 +27,12 @@ useMedianForSampling = (False,False,True)
 ccW=1.0
 dscWeight=0.0
 downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
-stoptAtSampleStep=3
+stoptAtSampleStep=1
 boundarySmoothnessW=(0.0,0.1,0.1)
 smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01
-lossTollerance=0.0000001#0.00001#
+lossTollerance=0.0001#0.0000001#0.00001#
+valueToIgnore=-1000 #set values outside mask to this value and ignores them during optimisation
 
 #
 #difeomorphic version parameters
