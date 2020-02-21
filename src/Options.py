@@ -31,7 +31,7 @@ stoptAtSampleStep=3
 boundarySmoothnessW=(0.0,0.1,0.1)
 smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01
-lossTollerance=0.0001#0.0000001#0.00001#
+lossTollerance=0.0000001#0.00001#
 valueToIgnore=-1000 #set values outside mask to this value and ignores them during optimisation
 
 #
