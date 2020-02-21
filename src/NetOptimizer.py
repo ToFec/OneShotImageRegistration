@@ -167,6 +167,15 @@ class NetOptimizer(object):
     
     imgDataDef = Utils.deformWholeImage(imgDataToWork, deformationField)
     cycleImgData, outOfBoundsTensor = self.getCycleImageData(deformationField)
+
+
+    if self.userOpts.valueToIgnore:
+      self.userOpts.useContext = False
+      idxArray = torch.zeros_like(imgDataToWork)
+      idxArray[imgDataToWork == self.userOpts.valueToIgnore] = 1.0
+      idxArray = Utils.deformWholeImage(idxArray, deformationField).detach()
+      imgDataDef[idxArray > 0.0] = self.userOpts.valueToIgnore
+      self.userOpts.useContext = True
    
     crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device, self.userOpts.valueToIgnore)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
