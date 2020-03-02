@@ -85,8 +85,8 @@ class LossFunctions():
         denominator = 0.0
         numerator = 0.0
         for label in uniqueVals[1:]:
-          if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(label):
-            trueLabelVol = self.diceKernelMapping[gaussKernel][label]
+          if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(str(label)):
+            trueLabelVol = self.diceKernelMapping[gaussKernel][str(label)]
           else:
             trueLabelVol = torch.zeros_like(y_true)
             if valueToIgnore is not None:
@@ -97,9 +97,9 @@ class LossFunctions():
               trueLabelVol[y_true == label ] = 1.0            
             trueLabelVol = gaussKernel(trueLabelVol)
             if self.diceKernelMapping.has_key(gaussKernel):
-              self.diceKernelMapping[gaussKernel][label] = trueLabelVol
+              self.diceKernelMapping[gaussKernel][str(label)] = trueLabelVol
             else:
-              self.diceKernelMapping[gaussKernel] = {label: trueLabelVol}
+              self.diceKernelMapping[gaussKernel] = {str(label): trueLabelVol}
           
           defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
                                                                               int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),

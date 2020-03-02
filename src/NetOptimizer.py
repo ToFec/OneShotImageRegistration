@@ -169,7 +169,7 @@ class NetOptimizer(object):
     cycleImgData, outOfBoundsTensor = self.getCycleImageData(deformationField)
 
 
-    if self.userOpts.valueToIgnore:
+    if self.userOpts.valueToIgnore is not None:
       self.userOpts.useContext = False
       idxArray = torch.zeros_like(imgDataToWork)
       idxArray[imgDataToWork == self.userOpts.valueToIgnore] = 1.0
