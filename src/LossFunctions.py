@@ -81,37 +81,45 @@ class LossFunctions():
 
     loss =  1 - dice
     if multiScale:
+      gaussKernelsApplied = 0
       for gaussKernel in self.gaussSmothingKernels:
-        denominator = 0.0
-        numerator = 0.0
-        for label in uniqueVals[1:]:
-          if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(str(label)):
-            trueLabelVol = self.diceKernelMapping[gaussKernel][str(label)]
-          else:
-            trueLabelVol = torch.zeros_like(y_true)
-            if valueToIgnore is not None:
-              boolArray0 = y_true == label
-              boolArray1 = valsEuqalIgnoreVal == 0
-              trueLabelVol[ boolArray0 & boolArray1] = 1.0              
+        if y_true.shape[2] < gaussKernel.weight.shape[2] or y_true.shape[3] < gaussKernel.weight.shape[3] or y_true.shape[4] < gaussKernel.weight.shape[4]:
+          continue
+        else:
+          gaussAdded = False
+          denominator = 0.0
+          numerator = 0.0
+          for label in uniqueVals[1:]:
+            if not gaussAdded:
+              gaussKernelsApplied = gaussKernelsApplied + 1
+              gaussAdded = True
+            if self.diceKernelMapping.has_key(gaussKernel) and self.diceKernelMapping[gaussKernel].has_key(str(label)):
+              trueLabelVol = self.diceKernelMapping[gaussKernel][str(label)]
             else:
-              trueLabelVol[y_true == label ] = 1.0            
-            trueLabelVol = gaussKernel(trueLabelVol)
-            if self.diceKernelMapping.has_key(gaussKernel):
-              self.diceKernelMapping[gaussKernel][str(label)] = trueLabelVol
-            else:
-              self.diceKernelMapping[gaussKernel] = {str(label): trueLabelVol}
-          
-          defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
-                                                                              int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
-                                                                              int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1 + idx)    
-          intersection = torch.sum(trueLabelVol * defLabelVol)
-          labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
-          denominator = denominator + labelSum
-          numerator = numerator + intersection
-          idx = idx + 1
-        dice = 2. * numerator / (denominator + smooth)
-        loss = loss + (1 - dice)
-      return loss / (len(self.gaussSmothingKernels) + 1.0)
+              trueLabelVol = torch.zeros_like(y_true)
+              if valueToIgnore is not None:
+                boolArray0 = y_true == label
+                boolArray1 = valsEuqalIgnoreVal == 0
+                trueLabelVol[ boolArray0 & boolArray1] = 1.0              
+              else:
+                trueLabelVol[y_true == label ] = 1.0            
+              trueLabelVol = gaussKernel(trueLabelVol)
+              if self.diceKernelMapping.has_key(gaussKernel):
+                self.diceKernelMapping[gaussKernel][str(label)] = trueLabelVol
+              else:
+                self.diceKernelMapping[gaussKernel] = {str(label): trueLabelVol}
+            
+            defLabelVol = Utils.deformWholeImage(trueLabelVol, deformationField[...,int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0):trueLabelVol.shape[2]+int((deformationField.shape[2]-trueLabelVol.shape[2])/2.0),
+                                                                                int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0):trueLabelVol.shape[3]+int((deformationField.shape[3]-trueLabelVol.shape[3])/2.0),
+                                                                                int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0):trueLabelVol.shape[4]+int((deformationField.shape[4]-trueLabelVol.shape[4])/2.0)], False, 1 + idx)    
+            intersection = torch.sum(trueLabelVol * defLabelVol)
+            labelSum = torch.sum(defLabelVol) + torch.sum(trueLabelVol)
+            denominator = denominator + labelSum
+            numerator = numerator + intersection
+            idx = idx + 1
+          dice = 2. * numerator / (denominator + smooth)
+          loss = loss + (1 - dice)
+      return loss / (gaussKernelsApplied + 1.0)
     else:
       return loss
   
