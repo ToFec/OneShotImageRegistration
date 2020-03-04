@@ -242,8 +242,11 @@ class OptimizeCaller():
             testlogFile.write(str(datasetIdx) + ';' + pointDistance + '\n')
         self.userOpts.useContext = useContext
     
+##
+## TODO: find a better way to deal with the resulsModels list; not very elegant to pass them to the trainOptimiser.run method
+##
   def trainNetDownSamplePatch(self, dataloader, validationDataLoader):
-    with TrainOptimise(self.net, self.userOpts) as trainOptimiser:
+    with TrainOptimise(self.userOpts) as trainOptimiser:
         samplingRates = self.getDownSampleRates()
         for samplingRateIdx, samplingRate in enumerate(samplingRates):
           self.resetNet()
@@ -254,7 +257,7 @@ class OptimizeCaller():
               resultModelsBUP = self.resultModels
               self.resultModels = self.resultModels[0:samplingRateIdx]
               self.net.load_state_dict(resultModelsBUP[samplingRateIdx]['model_state'])
-              trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
+              trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader, self.resultModels)
               self.resultModels = resultModelsBUP
               self.resultModels[samplingRateIdx] = {'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())}
               torch.save({
@@ -265,7 +268,7 @@ class OptimizeCaller():
               continue
           else:
             print("train model for saplingrate: " + str(samplingRate))
-            trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader)
+            trainOptimiser.run(self.net, samplingRate, samplingRateIdx, dataloader, validationDataLoader, self.resultModels)
             self.resultModels.append({'samplingRate': samplingRate, 'model_state': copy.deepcopy(self.net.state_dict())})
             torch.save({
               'model_state_dict': self.net.state_dict(),

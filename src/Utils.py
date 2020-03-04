@@ -362,7 +362,7 @@ def sampleImgData(data, samplingRate):
     
     return (imgData, maskData, labelData, landmarkData)
   
-def deformLandmarks(self, landmarkData, image, defField, spacing, origin, cosines):
+def deformLandmarks(landmarkData, image, defField, spacing, origin, cosines):
   if (len(landmarkData) > 0):
     pp = PointProcessor()
     deformedlandmarkData = list(landmarkData)

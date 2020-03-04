@@ -11,10 +11,16 @@ class NetOptimizer(object):
     self.net = net
     self.userOpts = options
     self.scalingSquaring = sas.ScalingAndSquaring(options.sasSteps)
-    self.smoother = gs.GaussianSmoothing(channels, options.finalGaussKernelSize, options.finalGaussKernelStd,3,options.device)
+    if channels is not None:
+      self.smoother = gs.GaussianSmoothing(channels, options.finalGaussKernelSize, options.finalGaussKernelStd,3,options.device)
+    else:
+      self.smoother = None
 
   def setOptimizer(self, optimizer):
     self.optimizer = optimizer
+    
+  def initSmoother(self, channels):
+    self.smoother = gs.GaussianSmoothing(channels, self.userOpts.finalGaussKernelSize, self.userOpts.finalGaussKernelStd,3,self.userOpts.device)
     
   def setUserOpts(self, options):
     self.userOpts = options
@@ -110,7 +116,7 @@ class NetOptimizer(object):
     self.optimizer.zero_grad()
      
     vecFields = self.net(imgDataToWork)
-    if self.userOpts.diffeomorphicRegistration:
+    if self.userOpts.diffeomorphicRegistration and self.smoother is not None:
       vecFields = self.smoother(vecFields)    
 
     cropStart0 = int((imgDataToWork.shape[2]-vecFields.shape[2])/2)

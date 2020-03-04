@@ -15,6 +15,7 @@ from eval.LandmarkHandler import PointProcessor
 from Sampler import Sampler
 import LossFunctions as lf
 from ScalingAndSquaring import ScalingAndSquaring
+from Utils import deformLandmarks, sampleImg
 
 class TrainOptimise(Optimise):
 
@@ -28,7 +29,7 @@ class TrainOptimise(Optimise):
     def __exit__(self, exc_type, exc_value, traceback):
       self.validationLogFile.close()         
       
-    def run(self, net, samplingRate, samplingRateIdx, dataloader, validationDataLoader):
+    def run(self, net, samplingRate, samplingRateIdx, dataloader, validationDataLoader, resultModels=[]):
       self.net = net
       self.net.train()
       optimizer = optim.Adam(self.net.parameters(),amsgrad=True)
@@ -40,17 +41,17 @@ class TrainOptimise(Optimise):
       
       for epoch in range(self.userOpts.numberOfEpochs[samplingRateIdx]):
         for i, data in enumerate(dataloader, 0):
-          netOptim.setSpacing(dataloader.dataset.getSpacingXZFlip(i))
+          netOptim.initSmoother(data['image'].shape[1]*3)
            
           lastField = None 
-          if len(self.resultModels) > 0:
+          if len(resultModels) > 0:
             currentState = copy.deepcopy(self.net.state_dict())
             with torch.no_grad():
   #             self.net.eval()
               useContext = self.userOpts.useContext
               self.userOpts.useContext = False
               for previousSampleIdxs in range(samplingRateIdx):
-                modelToApply = self.resultModels[previousSampleIdxs]
+                modelToApply = resultModels[previousSampleIdxs]
                 self.net.load_state_dict(modelToApply['model_state'])
                 defField = self.getDeformationField(data, modelToApply['samplingRate'], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
                 if lastField is None:
@@ -92,8 +93,8 @@ class TrainOptimise(Optimise):
             currDefFieldGPU = currDefField[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
             lastDeffieldGPU = lastDeffield[:, :, currDefFieldIdx[0]:currDefFieldIdx[0]+currDefFieldIdx[3], currDefFieldIdx[1]:currDefFieldIdx[1]+currDefFieldIdx[4], currDefFieldIdx[2]:currDefFieldIdx[2]+currDefFieldIdx[5]].to(device=self.userOpts.device)
             
-            loss = netOptim.optimizeNet(imgDataToWork, lossCalculator, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False)
-            
+            [loss, crossCorr, diceLoss, smoothnessDF, cycleLoss] = netOptim.optimizeNet(imgDataToWork, lossCalculator, None, lastDeffieldGPU, currDefFieldGPU, offset, samplingRateIdx, False)
+            #TODO: log also other loss values
             detachLoss = loss.detach()                
             self.logFile.write(str(epoch) + ';' + str(float(detachLoss)) + '\n')
             self.logFile.flush()
@@ -113,7 +114,7 @@ class TrainOptimise(Optimise):
                 'loss': loss,
                 'samplingRate': samplingRate
                 }, self.userOpts.outputPath + os.path.sep + 'registrationModel'+str(samplingRateIdx)+str(epoch)+'.pt')
-          validationLosses, landmarkDistances = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift)
+          validationLosses, landmarkDistances = self.validateModel(validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift, resultModels)
           if len(landmarkDistances) > 0:
             self.validationLogFile.write(str(epoch) + ';' + str(np.mean(validationLosses)) + ';' + str(np.std(validationLosses)) + ';' + str(np.mean(landmarkDistances)) + ';' + '\n')
           else:
@@ -123,7 +124,7 @@ class TrainOptimise(Optimise):
           self.net.train()
       return self.net 
           
-    def validateModel(self, validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift):
+    def validateModel(self, validationDataLoader, netOptim, samplingRate, samplingRateIdx, padVals, samplerShift, resultModels = []):
       with torch.no_grad():
   #       self.net.eval()
         useContext = self.userOpts.useContext
@@ -135,9 +136,9 @@ class TrainOptimise(Optimise):
           landmarksBeforeDeformation = validationData['landmarks']
           
           lastField = None
-          if len(self.resultModels) > 0:
+          if len(resultModels) > 0:
             currentState = copy.deepcopy(self.net.state_dict())
-            for modelIdx, previousModels in enumerate(self.resultModels):
+            for modelIdx, previousModels in enumerate(resultModels):
               self.net.load_state_dict(previousModels['model_state'])
               defField = self.getDeformationField(validationData, previousModels['samplingRate'], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
               if lastField is None:
@@ -187,7 +188,12 @@ class TrainOptimise(Optimise):
             if self.userOpts.diffeomorphicRegistration:
               sas = ScalingAndSquaring(self.userOpts.sasSteps)
               deformationField = sas(currValidationField)
-            validationData['landmarks'] = self.deformLandmarks(validationData['landmarks'], validationData['image'], deformationField, validationDataLoader.dataset.getSpacing(validationDataIdx),
+            else:
+              deformationField = currValidationField
+            upSampleRate = 1.0 / samplingRate
+            deformationField = deformationField * upSampleRate
+            deformationField = sampleImg(deformationField, upSampleRate)
+            validationData['landmarks'] = deformLandmarks(validationData['landmarks'], validationData['image'], deformationField, validationDataLoader.dataset.getSpacing(validationDataIdx),
                                   validationDataLoader.dataset.getOrigin(validationDataIdx), 
                                   validationDataLoader.dataset.getDirectionCosines(validationDataIdx))
             totalMeanPointDist = 0.0
