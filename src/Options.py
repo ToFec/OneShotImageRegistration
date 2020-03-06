@@ -4,7 +4,7 @@ import torch
 #
 useContext = True
 debugMode=True
-numberOfEpochs = [500,500,1000]#[1000,1000,1000]
+numberOfEpochs = [300,500,1000]#[1000,1000,1000]
 #numberOfEpochs = [200,250,1000]#with training of 3D pairs
 trainingFileNamesCSV=''
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

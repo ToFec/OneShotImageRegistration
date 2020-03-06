@@ -54,6 +54,9 @@ class TrainOptimise(Optimise):
                 modelToApply = resultModels[previousSampleIdxs]
                 self.net.load_state_dict(modelToApply['model_state'])
                 defField = self.getDeformationField(data, modelToApply['samplingRate'], self.userOpts.patchSize[previousSampleIdxs], self.userOpts.useMedianForSampling[previousSampleIdxs], samplerShift)
+                upSampleRate = 1.0 / modelToApply['samplingRate']
+                defField = defField * upSampleRate
+                defField = sampleImg(defField, upSampleRate)
                 if lastField is None:
                   lastField = defField
                 else:
@@ -141,6 +144,9 @@ class TrainOptimise(Optimise):
             for modelIdx, previousModels in enumerate(resultModels):
               self.net.load_state_dict(previousModels['model_state'])
               defField = self.getDeformationField(validationData, previousModels['samplingRate'], self.userOpts.patchSize[modelIdx], self.userOpts.useMedianForSampling[modelIdx], samplerShift)
+              upSampleRate = samplingRate / previousModels['samplingRate']
+              defField = defField * upSampleRate
+              defField = sampleImg(defField, upSampleRate)
               if lastField is None:
                 lastField = defField
               else:
