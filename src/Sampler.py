@@ -1,7 +1,7 @@
 import torch
 from Utils import getMaxIdxs, getPatchSize, normalizeImg
 import numpy as np
-from Options import netDepth, netMinPatchSizePadded
+from Options import netDepth, netMinPatchSizePadded, diffeomorphicRegistration, finalGaussKernelSize
 
 class Sampler(object):
 
@@ -276,7 +276,11 @@ class Sampler(object):
   def getNextPatchSize(self, leftover):
     nuOfDownSampleLayers = netDepth - 1
     modValue = 2**(nuOfDownSampleLayers)
-    minPatchSize = leftover if leftover > netMinPatchSizePadded else netMinPatchSizePadded
+    if diffeomorphicRegistration:
+      minSize = netMinPatchSizePadded + (2* int(finalGaussKernelSize/2))
+    else:
+      minSize = netMinPatchSizePadded
+    minPatchSize = leftover if leftover > minSize else minSize
     if minPatchSize % modValue != 0:
       minPatchSize = (int(np.ceil(minPatchSize / float(modValue))) * modValue)
     return minPatchSize
