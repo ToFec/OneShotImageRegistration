@@ -1,7 +1,10 @@
 # OneShotImageRegistration
 One Shot Deformable Medical Image Registration
 
-a description of this work can be found here: https://arxiv.org/abs/1907.04641
+a description of this work can be found here: https://arxiv.org/abs/1907.04641 and https://ieeexplore.ieee.org/document/8989991
+
+if you use this work please cite:
+T. Fechter and D. Baltas, "One Shot Learning for Deformable Medical Image Registration and Periodic Motion Tracking," in IEEE Transactions on Medical Imaging.
 
 **to start a registration call:**
 python src/OnePatchShot.py --trainingFiles=PATH_TO_INPUT_CSV_FILE  --outputPath=OUTPUT_PATH
