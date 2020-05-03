@@ -191,7 +191,9 @@ class NetOptimizer(object):
       sublabelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
       diceLoss = lossCalculator.multiLabelDiceLoss(sublabelToWork, deformationField, True, self.userOpts.valueToIgnore)
 
-    loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss    
+#     vecLengthLoss = lossCalculator.vecLength(deformationField)
+
+    loss = crossCorrWeight * crossCorr + dscWeight * diceLoss + smoothNessWeight * smoothnessDF + self.userOpts.cycleW * cycleLoss  
     if printLoss:
       print('%.5f; %.5f; %5f; %5f; %.5f' % (loss, crossCorr, smoothnessDF, cycleLoss, diceLoss))
     torch.cuda.empty_cache()

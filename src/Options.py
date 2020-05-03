@@ -4,7 +4,7 @@ import torch
 #
 useContext = True
 debugMode=True
-numberOfEpochs = [300,500,1000]#[1000,1000,1000]
+numberOfEpochs = [1000,1000,1000]#[300,200,1000]#for ecomp paper
 #numberOfEpochs = [200,250,1000]#with training of 3D pairs
 trainingFileNamesCSV=''
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -24,15 +24,15 @@ useMedianForSampling = (False,False,True)
 #
 #cost functon parameters
 #
-ccW=1.0
-dscWeight=0.0
+ccW=0.8
+dscWeight=0.2
 downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
-stoptAtSampleStep=3
+stoptAtSampleStep=1
 boundarySmoothnessW=(0.0,0.1,0.1)
 smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01
-lossTollerance=0.00001#0.0000001#0.00001#
-valueToIgnore=None#-1000 #set values outside mask to this value and ignores them during optimisation
+lossTollerance=0.00001#0.00001#0.0000001#
+valueToIgnore=-1000#None #set values outside mask to this value and ignores them during optimisation
 
 #
 #difeomorphic version parameters

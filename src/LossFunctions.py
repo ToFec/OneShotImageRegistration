@@ -125,6 +125,7 @@ class LossFunctions():
   
     
 #     Weakly-supervised convolutional neural networks for multimodal image registration
+#TODO: test if smoothing before deformation works better
   def multiScaleDiceLoss(self, y_true, y_pred):
     currDscLoss = self.dice_loss(y_true, y_pred)
     for gaussKernel in self.gaussSmothingKernels:
