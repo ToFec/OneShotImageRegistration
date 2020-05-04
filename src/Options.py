@@ -4,6 +4,7 @@ import torch
 #
 useContext = True
 debugMode=True
+handleStructsAsImages=False
 numberOfEpochs = [1000,1000,1000]#[300,200,1000]#for ecomp paper
 #numberOfEpochs = [200,250,1000]#with training of 3D pairs
 trainingFileNamesCSV=''

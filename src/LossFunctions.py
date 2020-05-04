@@ -323,6 +323,26 @@ class LossFunctions():
         dotProd = torch.dot(x,y) + 1
         results[imgIdx * self.imgData.shape[0] + chanIdx] = dotProd
     return 1 - (torch.sum(results) / (2 * self.imgData.shape[0] * self.imgData.shape[1]))
+  
+  ## images must have the same shape
+  def normCrossCorr2Images(self, origImg, defImg, device0, valueToIgnore = None):
+    results = torch.empty(origImg.shape[0]*origImg.shape[1], device=device0)
+    for imgIdx in range(origImg.shape[0]):
+      for chanIdx in range(origImg.shape[1]):
+        x = origImg[imgIdx, chanIdx,]
+        y = defImg[imgIdx, chanIdx,]        
+        if valueToIgnore is not None:
+          valuesToConsider = (x != valueToIgnore) & (y != valueToIgnore)
+          x = x[valuesToConsider]
+          y = y[valuesToConsider]
+        else:
+          x = torch.reshape(x, (-1,))
+          y = torch.reshape(y, (-1,))
+        x = torch.nn.functional.normalize(x,2,-1)
+        y = torch.nn.functional.normalize(y,2,-1)
+        dotProd = torch.dot(x,y) + 1
+        results[imgIdx * origImg.shape[0] + chanIdx] = dotProd
+    return 1 - (torch.sum(results) / (2 * origImg.shape[0] * origImg.shape[1]))  
 
   def vecLength(self, defField):
     tmp0 = defField[:,range(0,defField.shape[1],3),] * defField[:,range(0,defField.shape[1],3),]

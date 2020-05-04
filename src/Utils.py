@@ -351,7 +351,10 @@ def sampleImgData(data, samplingRate):
         maskData = maskDataOrig
       if (labelDataOrig.dim() == imgDataOrig.dim()):
 #         labelDataOrig = labelDataOrig.float()
-        labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
+        if useropts.handleStructsAsImages:
+          labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='trilinear')
+        else:
+          labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
 #         labelData = labelData.byte()
       else:
         labelData = labelDataOrig
