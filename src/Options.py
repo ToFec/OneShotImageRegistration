@@ -4,7 +4,7 @@ import torch
 #
 useContext = True
 debugMode=True
-handleStructsAsImages=False
+handleStructsAsImages=True
 numberOfEpochs = [1000,1000,1000]#[300,200,1000]#for ecomp paper
 #numberOfEpochs = [200,250,1000]#with training of 3D pairs
 trainingFileNamesCSV=''
@@ -25,10 +25,10 @@ useMedianForSampling = (False,False,True)
 #
 #cost functon parameters
 #
-ccW=0.8
-dscWeight=0.2
-downSampleSteps = 2# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
-stoptAtSampleStep=1
+ccW=0.5
+dscWeight=0.5
+downSampleSteps = 1# a size of 2 means 3 iterations with the following downsampling factors: (0.25,0.5,1.0)
+stoptAtSampleStep=2
 boundarySmoothnessW=(0.0,0.1,0.1)
 smoothW = (0.0005,0.0005,0.0005)
 cycleW = 0.01

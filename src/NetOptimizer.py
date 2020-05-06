@@ -176,22 +176,39 @@ class NetOptimizer(object):
 
 
     if self.userOpts.valueToIgnore is not None:
-      self.userOpts.useContext = False
+      contextSet=False
+      if self.userOpts.useContext:
+        self.userOpts.useContext = False
+        contextSet=True
       idxArray = torch.zeros_like(imgDataToWork)
       idxArray[imgDataToWork == self.userOpts.valueToIgnore] = 1.0
       idxArray = Utils.deformWholeImage(idxArray, deformationField).detach()
       imgDataDef[idxArray > 0.0] = self.userOpts.valueToIgnore
-      self.userOpts.useContext = True
+      if contextSet:
+        self.userOpts.useContext = True
    
-    crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device, self.userOpts.valueToIgnore)
+    crossCorr = torch.tensor(0.0,device=self.userOpts.device)
+    if crossCorrWeight > 0.0:   
+      crossCorr = lossCalculator.normCrossCorr(imgDataDef, self.userOpts.device, self.userOpts.valueToIgnore)
     cycleLoss = lossCalculator.cycleLoss(cycleImgData,outOfBoundsTensor, self.userOpts.device)
     
     diceLoss = torch.tensor(0.0,device=self.userOpts.device)
     if labelToWork is not None and dscWeight > 0.0:
       sublabelToWork = labelToWork[:,:,cropStart0:cropStart0+vecFields.shape[2], cropStart1:cropStart1+vecFields.shape[3], cropStart2:cropStart2+vecFields.shape[4]]
       if self.userOpts.handleStructsAsImages:
-        sublabelToWorkDeformed = Utils.deformWholeImage(sublabelToWork, deformationField)
+        contextSet=False
+        if self.userOpts.useContext:
+          self.userOpts.useContext = False
+          contextSet=True
+        sublabelToWorkDeformed = Utils.deformWholeImage(sublabelToWork, deformationField, imgIdx=-1)
+        if self.userOpts.valueToIgnore is not None:
+          idxArray = torch.zeros_like(sublabelToWork)
+          idxArray[sublabelToWork == self.userOpts.valueToIgnore] = 1.0
+          idxArray = Utils.deformWholeImage(idxArray, deformationField).detach()
+          sublabelToWorkDeformed[idxArray > 0.0] = self.userOpts.valueToIgnore
         diceLoss = lossCalculator.normCrossCorr2Images(sublabelToWork, sublabelToWorkDeformed, self.userOpts.device, self.userOpts.valueToIgnore)
+        if contextSet:
+          self.userOpts.useContext = True
       else:        
         diceLoss = lossCalculator.multiLabelDiceLoss(sublabelToWork, deformationField, True, self.userOpts.valueToIgnore)
 

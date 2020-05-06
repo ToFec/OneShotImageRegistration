@@ -156,6 +156,9 @@ class HeadAndNeckDataset(Dataset):
         imgData = self.normalize(imgData, None, idx)
       
       if (len(labelsFileNames) > 0) and (len(labelsFileNames) == len(maskFileNames)):
+        if Options.handleStructsAsImages:
+          labelData = self.normalize(labelData, maskData, -1)
+        else:
           labelData[maskData == 0] = 0
       
       imgData, maskData, labelData = self.getRightSizedData(imgData, maskData, labelData, idx)
@@ -186,15 +189,18 @@ class HeadAndNeckDataset(Dataset):
             imgData[maskData == 0] = Options.valueToIgnore
           else:
             imgData[maskData == 0] = 0
-          self.meansAndStds[idx] = (imgMean, imgStd)        
+          if idx > -1:
+            self.meansAndStds[idx] = (imgMean, imgStd)        
         else:
           imgMean = imgData.mean()
           imgData = imgData - imgMean
           imgStd = imgData.std()
           imgData = imgData / imgStd
-          self.meansAndStds[idx] = (imgMean, imgStd)
+          if idx > -1:
+            self.meansAndStds[idx] = (imgMean, imgStd)
       else:
-        self.meansAndStds[idx] = (0, 1)
+        if idx > -1:
+          self.meansAndStds[idx] = (0, 1)
       return imgData
     
     def getSpacing(self, idx):

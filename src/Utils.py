@@ -78,7 +78,7 @@ def getZeroIdxField(imagShape, device):
   return [idxs0.clone(), idxs1.clone(), idxs2.clone(), idxs3.clone(), idxs4.clone()]
 
 def getImgDataDef(imagShape, device, dataType=torch.float32, imgIdx=0):
-  if useropts.useContext:
+  if useropts.useContext and imgIdx > -1:
     if (imgIdx not in Context.imgDataDef) or (imagShape != Context.imgDataDef[imgIdx].shape) or Context.imgDataDef[imgIdx].dtype != dataType:
       imgDataDef = torch.empty(imagShape, device=device, dtype=dataType, requires_grad=False)
       Context.imgDataDef[imgIdx] = imgDataDef
@@ -353,6 +353,11 @@ def sampleImgData(data, samplingRate):
 #         labelDataOrig = labelDataOrig.float()
         if useropts.handleStructsAsImages:
           labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='trilinear')
+          if useropts.valueToIgnore is not None:
+            boolValToIgnore = torch.zeros_like(labelDataOrig)
+            boolValToIgnore[labelDataOrig == useropts.valueToIgnore] = 1.0
+            boolValToIgnore = torch.nn.functional.interpolate(boolValToIgnore, scale_factor=samplingRate, mode='trilinear')
+            labelData[boolValToIgnore > 0] = useropts.valueToIgnore
         else:
           labelData = torch.nn.functional.interpolate(labelDataOrig, scale_factor=samplingRate, mode='nearest')
 #         labelData = labelData.byte()

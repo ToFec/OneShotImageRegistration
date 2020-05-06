@@ -170,13 +170,13 @@ class OptimizeCaller():
   
   
   def applyDefField(self, defField, data, datasetIdx, dataset):
-    deformedData = {'image': deformWholeImage(data['image'].to(self.userOpts.device), defField, channelOffset = 0)}
+    deformedData = {'image': deformWholeImage(data['image'].to(self.userOpts.device), defField, imgIdx=-1)}
     if (data['mask'].dim() == data['image'].dim()):
-      deformedData['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True, channelOffset = 0)
+      deformedData['mask'] = deformWholeImage(data['mask'].to(self.userOpts.device), defField,True, imgIdx=-1)
     else:
       deformedData['mask'] = torch.tensor([1])
     if (data['label'].dim() == data['image'].dim()):
-      deformedData['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True, channelOffset = 0)
+      deformedData['label'] = deformWholeImage(data['label'].to(self.userOpts.device), defField,True, imgIdx=-1)
     else:
       deformedData['label'] = torch.tensor([1])      
       
