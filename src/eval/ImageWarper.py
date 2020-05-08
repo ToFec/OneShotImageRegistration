@@ -3,7 +3,7 @@ import SimpleITK as sitk
 import torch
 import numpy as np
 
-import src.Utils
+import Utils
 
 def main(argv):
   try:
@@ -60,9 +60,9 @@ def main(argv):
     
     
     if isBinary:
-      deformedImage = src.Utils.deformWithNearestNeighborInterpolation(imageTorch, defFieldTorch, 'cpu')
+      deformedImage = Utils.deformWithNearestNeighborInterpolation(imageTorch, defFieldTorch, 'cpu')
     else:
-      deformedImage = src.Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
+      deformedImage = Utils.deformImage(imageTorch, defFieldTorch, 'cpu')
     deformedImageITK = sitk.GetImageFromArray(torch.tensor(deformedImage[0, 0, ],dtype=imageType))
     
     deformedImageITK.SetSpacing( imageSpacing )

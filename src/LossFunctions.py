@@ -318,9 +318,12 @@ class LossFunctions():
         else:
           x = torch.reshape(x, (-1,))
           y = torch.reshape(y, (-1,))
-        x = torch.nn.functional.normalize(x,2,-1)
-        y = torch.nn.functional.normalize(y,2,-1)
-        dotProd = torch.dot(x,y) + 1
+        if (x.numel() > 0 and y.numel() > 0):
+          x = torch.nn.functional.normalize(x,2,-1)
+          y = torch.nn.functional.normalize(y,2,-1)
+          dotProd = torch.dot(x,y) + 1
+        else:
+          dotProd = torch.tensor(2.0)
         results[imgIdx * self.imgData.shape[0] + chanIdx] = dotProd
     return 1 - (torch.sum(results) / (2 * self.imgData.shape[0] * self.imgData.shape[1]))
   
